@@ -1,59 +1,62 @@
 import { useSearchParams } from "react-router-dom";
+import { LayoutDashboard, BookOpen, Users, BarChart3 } from "lucide-react";
 
 import DashboardLayout from "../layouts/DashboardLayout";
+import DashboardTabs from "../components/common/DashboardTabs";
+
 import InstructorOverview from "../components/instructorDashboard/InstructorOverview";
 import InstructorCourses from "../components/instructorDashboard/InstructorCourses";
 import InstructorStudents from "../components/instructorDashboard/InstructorStudents";
 import InstructorAnalytics from "../components/instructorDashboard/InstructorAnalytics";
 
 const InstructorDashboard = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const activeTab = searchParams.get("tab") || "overview";
 
   const tabs = [
-    { key: "overview", label: "Overview" },
-    { key: "courses", label: "Courses" },
-    { key: "students", label: "Students" },
-    { key: "analytics", label: "Analytics" },
+    {
+      key: "overview",
+      label: "Overview",
+      icon: LayoutDashboard,
+      description: "Teaching summary",
+    },
+    {
+      key: "courses",
+      label: "Courses",
+      icon: BookOpen,
+      description: "Course modules",
+    },
+    {
+      key: "students",
+      label: "Students",
+      icon: Users,
+      description: "Learner progress",
+    },
+    {
+      key: "analytics",
+      label: "Analytics",
+      icon: BarChart3,
+      description: "Class insights",
+    },
   ];
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900">
-          Instructor Dashboard
-        </h1>
+      <div className="flex flex-col gap-8 lg:flex-row">
+        <DashboardTabs
+          tabs={tabs}
+          title="Instructor Panel"
+          subtitle="Teaching workspace"
+        />
 
-        <p className="text-slate-500">
-          Manage your courses, students and performance insights.
-        </p>
+        <div className="min-w-0 flex-1">
+          {activeTab === "overview" && <InstructorOverview />}
+          {activeTab === "courses" && <InstructorCourses />}
+          {activeTab === "students" && <InstructorStudents />}
+          {activeTab === "analytics" && <InstructorAnalytics />}
+        </div>
       </div>
-
-      <div className="mb-8 flex overflow-x-auto rounded-2xl bg-white p-2 shadow-sm">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() =>
-              tab.key === "overview"
-                ? setSearchParams({})
-                : setSearchParams({ tab: tab.key })
-            }
-            className={`min-w-fit rounded-xl px-5 py-3 text-sm font-bold transition ${
-              activeTab === tab.key
-                ? "bg-blue-600 text-white"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === "overview" && <InstructorOverview />}
-      {activeTab === "courses" && <InstructorCourses />}
-      {activeTab === "students" && <InstructorStudents />}
-      {activeTab === "analytics" && <InstructorAnalytics />}
     </DashboardLayout>
   );
 };

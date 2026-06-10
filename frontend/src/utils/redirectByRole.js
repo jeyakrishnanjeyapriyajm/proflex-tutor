@@ -2,11 +2,11 @@ export const getDashboardPath = (user) => {
   if (!user) return "/login";
 
   if (user.role === "admin") {
-    return "/admin-dashboard";
+    return "/admin/dashboard";
   }
 
   if (user.role === "instructor" && user.roleStatus === "approved") {
-    return "/instructor-dashboard";
+    return "/lecturer/overview";
   }
 
   if (
@@ -16,5 +16,5 @@ export const getDashboardPath = (user) => {
     return "/approval-pending";
   }
 
-  return "/user-dashboard";
+  return "/student/dashboard";
 };
