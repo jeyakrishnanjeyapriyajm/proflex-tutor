@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Clock,
   Lightbulb,
+  BookOpen,
 } from "lucide-react";
 
 import Card from "../common/Card";
@@ -25,7 +26,7 @@ const StudentTaskGivingPanel = () => {
   const [startedAt, setStartedAt] = useState(null);
   const [message, setMessage] = useState("");
   const [stuckData, setStuckData] = useState(null);
-  const [hint, setHint] = useState("");
+  const [support, setSupport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingModules, setLoadingModules] = useState(true);
 
@@ -43,15 +44,19 @@ const StudentTaskGivingPanel = () => {
     }
   };
 
+  const resetTaskUi = () => {
+    setSelectedAnswer("");
+    setStuckData(null);
+    setSupport(null);
+    setMessage("");
+  };
+
   const handleStartModule = async (module) => {
     try {
       setLoading(true);
       setSelectedModule(module);
       setTask(null);
-      setSelectedAnswer("");
-      setStuckData(null);
-      setHint("");
-      setMessage("");
+      resetTaskUi();
 
       await startTaskModule(module._id);
 
@@ -76,9 +81,7 @@ const StudentTaskGivingPanel = () => {
 
     try {
       setLoading(true);
-      setMessage("");
-      setStuckData(null);
-      setHint("");
+      resetTaskUi();
 
       const data = await getCurrentTask(selectedModule._id);
 
@@ -87,7 +90,6 @@ const StudentTaskGivingPanel = () => {
         setMessage(`Module completed. Score: ${data.score}`);
       } else {
         setTask(data.question);
-        setSelectedAnswer("");
         setStartedAt(Date.now());
       }
     } catch (error) {
@@ -97,16 +99,20 @@ const StudentTaskGivingPanel = () => {
     }
   };
 
-  const handleSubmitAnswer = async ({ hintUsed = false } = {}) => {
+  const handleSubmitAnswer = async () => {
     if (!selectedAnswer) {
       setMessage("Please select one answer.");
+      return;
+    }
+
+    if (!selectedModule?._id || !task?._id) {
+      setMessage("Module or task is missing.");
       return;
     }
 
     try {
       setLoading(true);
       setMessage("");
-      setHint("");
       setStuckData(null);
 
       const timeTakenSeconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -116,7 +122,6 @@ const StudentTaskGivingPanel = () => {
         questionId: task._id,
         selectedAnswer,
         timeTakenSeconds,
-        hintUsed,
       });
 
       setMessage(data.message);
@@ -124,21 +129,34 @@ const StudentTaskGivingPanel = () => {
       if (data.nextAction === "NEXT_SEQUENTIAL_TASK") {
         setTask(data.nextQuestion);
         setSelectedAnswer("");
+        setSupport(null);
+        setStuckData(null);
         setStartedAt(Date.now());
       }
 
-      if (data.nextAction === "RETRY_SAME_TASK") {
+      if (data.nextAction === "SHOW_HINT") {
         setSelectedAnswer("");
-        setHint(data.hint || "");
+        setSupport(data.support || null);
+        setStuckData(null);
+      }
+
+      if (data.nextAction === "SHOW_EXPLANATION") {
+        setSelectedAnswer("");
+        setSupport(data.support || null);
+        setStuckData(null);
       }
 
       if (data.nextAction === "SEND_TO_DIFFICULTY_ANALYSIS") {
         setSelectedAnswer("");
+        setSupport(null);
         setStuckData(data.stuckPayload);
       }
 
       if (data.nextAction === "MODULE_COMPLETED") {
         setTask(null);
+        setSelectedAnswer("");
+        setSupport(null);
+        setStuckData(null);
       }
     } catch (error) {
       setMessage(error.response?.data?.message || "Could not submit answer.");
@@ -167,7 +185,9 @@ const StudentTaskGivingPanel = () => {
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               Select a module. The system gives one MCQ at a time from easy to
-              hard. Correct answers unlock the next task.
+              hard. If the first answer is wrong, the system shows a hint. If
+              the second answer is wrong, it shows an explanation. After the
+              third wrong attempt, the student is sent to Difficulty Analysis.
             </p>
           </div>
 
@@ -268,29 +288,40 @@ const StudentTaskGivingPanel = () => {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <button
-              onClick={() => handleSubmitAnswer({ hintUsed: false })}
+              onClick={handleSubmitAnswer}
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-6 py-3 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-60"
             >
               <CheckCircle2 size={18} />
               {loading ? "Checking..." : "Submit Answer"}
             </button>
-
-            <button
-              onClick={() => handleSubmitAnswer({ hintUsed: true })}
-              disabled={loading || !selectedAnswer}
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-6 py-3 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
-            >
-              <Lightbulb size={18} />
-              Submit With Hint Used
-            </button>
           </div>
         </Card>
       )}
 
-      {hint && (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5 text-sm font-semibold text-amber-800">
-          Hint: {hint}
+      {support && (
+        <div
+          className={`rounded-2xl border p-5 text-sm font-semibold ${
+            support.type === "hint"
+              ? "border-amber-100 bg-amber-50 text-amber-800"
+              : "border-blue-100 bg-blue-50 text-blue-800"
+          }`}
+        >
+          <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-wide">
+            {support.type === "hint" ? (
+              <>
+                <Lightbulb size={18} />
+                Hint
+              </>
+            ) : (
+              <>
+                <BookOpen size={18} />
+                Explanation
+              </>
+            )}
+          </div>
+
+          <p className="leading-6">{support.text}</p>
         </div>
       )}
 
@@ -308,8 +339,9 @@ const StudentTaskGivingPanel = () => {
           </div>
 
           <p className="text-sm leading-6 text-orange-800">
-            The student is stuck. This payload should be sent to Difficulty
-            Analysis and Decision Making.
+            The student answered incorrectly three times. This payload should be
+            sent to the BKT + RL Difficulty Analysis model and Q-learning
+            Decision Making model.
           </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -345,6 +377,15 @@ const StudentTaskGivingPanel = () => {
               <p className="font-black text-orange-900">
                 <Clock size={16} className="mr-1 inline" />
                 {stuckData.timeTakenSeconds}s
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/70 p-4 md:col-span-2">
+              <p className="text-xs font-bold uppercase text-orange-500">
+                Misconception Tag
+              </p>
+              <p className="font-black text-orange-900">
+                {stuckData.misconceptionTag || "Not mapped"}
               </p>
             </div>
           </div>

@@ -3,12 +3,6 @@ const Question = require("../models/Question");
 const StudentModuleProgress = require("../models/StudentModuleProgress");
 const QuestionAttempt = require("../models/QuestionAttempt");
 
-const EXPECTED_TIME_SECONDS = {
-  easy: 45,
-  medium: 90,
-  hard: 150,
-};
-
 const publicQuestionFields = "-correctAnswer -explanation";
 
 const getStudentId = (req) => {
@@ -159,8 +153,14 @@ const submitTaskAnswer = async (req, res) => {
       questionId,
       selectedAnswer,
       timeTakenSeconds = 0,
-      hintUsed = false,
     } = req.body;
+
+    if (!moduleId || !questionId || !selectedAnswer) {
+      return res.status(400).json({
+        success: false,
+        message: "moduleId, questionId and selectedAnswer are required",
+      });
+    }
 
     const question = await Question.findById(questionId);
 
@@ -183,8 +183,16 @@ const submitTaskAnswer = async (req, res) => {
       });
     }
 
+    if (progress.status === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "This module is already completed",
+      });
+    }
+
     const previousAttemptCount = await QuestionAttempt.countDocuments({
       student: studentId,
+      module: moduleId,
       question: questionId,
     });
 
@@ -197,12 +205,6 @@ const submitTaskAnswer = async (req, res) => {
 
     const misconceptionTag = selectedOption?.misconceptionTag || "";
 
-    const expectedTime = EXPECTED_TIME_SECONDS[question.difficulty] || 90;
-    const slowAttempt = Number(timeTakenSeconds) > expectedTime;
-    const repeatedWrong = !isCorrect && attemptNo >= 2;
-
-    const isStuck = repeatedWrong || slowAttempt || hintUsed;
-
     await QuestionAttempt.create({
       student: studentId,
       module: moduleId,
@@ -211,8 +213,8 @@ const submitTaskAnswer = async (req, res) => {
       isCorrect,
       attemptNo,
       timeTakenSeconds,
-      hintUsed,
-      isStuck,
+      hintUsed: attemptNo >= 2,
+      isStuck: !isCorrect && attemptNo >= 3,
       misconceptionTag,
     });
 
@@ -224,6 +226,7 @@ const submitTaskAnswer = async (req, res) => {
 
     await question.save();
 
+    // CASE 1: CORRECT ANSWER
     if (isCorrect) {
       const alreadyCompleted = progress.completedQuestionIds.some(
         (id) => id.toString() === questionId
@@ -254,7 +257,7 @@ const submitTaskAnswer = async (req, res) => {
           isCorrect: true,
           completed: true,
           nextAction: "MODULE_COMPLETED",
-          message: "Correct. Module completed.",
+          message: "Correct answer. Module completed.",
           score: progress.score,
         });
       }
@@ -266,48 +269,74 @@ const submitTaskAnswer = async (req, res) => {
         isCorrect: true,
         isStuck: false,
         nextAction: "NEXT_SEQUENTIAL_TASK",
-        message: "Correct. Next task is unlocked.",
+        message: "Correct answer. Next task is unlocked.",
         nextQuestion,
         progress,
       });
     }
 
-    if (isStuck) {
-      progress.status = "stuck";
-      progress.stuckQuestion = questionId;
-      await progress.save();
-
+    // CASE 2: FIRST WRONG ATTEMPT → SHOW HINT
+    if (attemptNo === 1) {
       return res.status(200).json({
         success: true,
         isCorrect: false,
-        isStuck: true,
-        nextAction: "SEND_TO_DIFFICULTY_ANALYSIS",
-        message:
-          "Student is stuck. Send this data to Difficulty Analysis and Decision Making.",
-        stuckPayload: {
-          moduleId,
-          questionId,
-          concept: question.concept,
-          difficulty: question.difficulty,
-          orderNo: question.orderNo,
-          attemptNo,
-          timeTakenSeconds,
-          hintUsed,
-          misconceptionTag,
-          questionHint: question.hint,
-          questionExplanation: question.explanation,
+        isStuck: false,
+        nextAction: "SHOW_HINT",
+        message: "Wrong answer. Read the hint and try again.",
+        attemptNo,
+        support: {
+          type: "hint",
+          text: question.hint || "Review the key concept and try again.",
         },
       });
     }
 
+    // CASE 3: SECOND WRONG ATTEMPT → SHOW EXPLANATION
+    if (attemptNo === 2) {
+      return res.status(200).json({
+        success: true,
+        isCorrect: false,
+        isStuck: false,
+        nextAction: "SHOW_EXPLANATION",
+        message: "Still incorrect. Read the explanation and try again.",
+        attemptNo,
+        support: {
+          type: "explanation",
+          text:
+            question.explanation ||
+            "Read the concept explanation carefully and try again.",
+        },
+      });
+    }
+
+    // CASE 4: THIRD WRONG ATTEMPT → SEND TO DIFFICULTY ANALYSIS
+    progress.status = "stuck";
+    progress.stuckQuestion = questionId;
+    await progress.save();
+
     return res.status(200).json({
       success: true,
       isCorrect: false,
-      isStuck: false,
-      nextAction: "RETRY_SAME_TASK",
-      message: "Wrong answer. Retry the same task before moving forward.",
-      hint: question.hint,
+      isStuck: true,
+      nextAction: "SEND_TO_DIFFICULTY_ANALYSIS",
+      message:
+        "Student is stuck after three attempts. Send this data to Difficulty Analysis and Decision Making.",
       attemptNo,
+      stuckPayload: {
+        studentId,
+        moduleId,
+        questionId,
+        concept: question.concept,
+        difficulty: question.difficulty,
+        orderNo: question.orderNo,
+        selectedAnswer,
+        correctAnswer: question.correctAnswer,
+        timeTakenSeconds,
+        hintUsed: true,
+        misconceptionTag,
+        questionHint: question.hint,
+        questionExplanation: question.explanation,
+      },
     });
   } catch (error) {
     console.error("SUBMIT TASK ANSWER ERROR:", error);
