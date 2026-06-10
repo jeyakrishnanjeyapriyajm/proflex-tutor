@@ -1,57 +1,62 @@
 import { useSearchParams } from "react-router-dom";
+import { BookOpen, BrainCircuit, BarChart3, User } from "lucide-react";
 
 import DashboardLayout from "../layouts/DashboardLayout";
+import DashboardTabs from "../components/common/DashboardTabs";
+
 import UserOverview from "../components/userDashboard/UserOverview";
 import UserCourses from "../components/userDashboard/UserCourses";
 import UserProgress from "../components/userDashboard/UserProgress";
 import UserProfile from "../components/userDashboard/UserProfile";
 
 const UserDashboard = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const activeTab = searchParams.get("tab") || "overview";
 
   const tabs = [
-    { key: "overview", label: "Overview" },
-    { key: "courses", label: "My Courses" },
-    { key: "progress", label: "Progress" },
-    { key: "profile", label: "Profile" },
+    {
+      key: "overview",
+      label: "Overview",
+      icon: BrainCircuit,
+      description: "Learning summary",
+    },
+    {
+      key: "courses",
+      label: "C Modules",
+      icon: BookOpen,
+      description: "Easy to hard tasks",
+    },
+    {
+      key: "progress",
+      label: "Progress",
+      icon: BarChart3,
+      description: "Mastery tracking",
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: User,
+      description: "Account details",
+    },
   ];
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900">User Dashboard</h1>
+      <div className="flex flex-col gap-8 lg:flex-row">
+        <DashboardTabs
+          tabs={tabs}
+          title="Student Panel"
+          subtitle="C programming workspace"
+        />
 
-        <p className="text-slate-500">
-          Continue learning and track your course progress.
-        </p>
+        <div className="min-w-0 flex-1">
+          {activeTab === "overview" && <UserOverview />}
+          {activeTab === "courses" && <UserCourses />}
+          {activeTab === "progress" && <UserProgress />}
+          {activeTab === "profile" && <UserProfile />}
+        </div>
       </div>
-
-      <div className="mb-8 grid gap-3 sm:grid-cols-4">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() =>
-              tab.key === "overview"
-                ? setSearchParams({})
-                : setSearchParams({ tab: tab.key })
-            }
-            className={`rounded-2xl px-5 py-4 text-sm font-bold transition ${
-              activeTab === tab.key
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === "overview" && <UserOverview />}
-      {activeTab === "courses" && <UserCourses />}
-      {activeTab === "progress" && <UserProgress />}
-      {activeTab === "profile" && <UserProfile />}
     </DashboardLayout>
   );
 };

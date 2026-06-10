@@ -1,18 +1,23 @@
 import MainLayout from "../layouts/MainLayout";
+
 import HeroSection from "../components/home/HeroSection";
 import FeatureSection from "../components/home/FeatureSection";
-import RoleSection from "../components/home/RoleSection";
-import WorkflowSection from "../components/home/WorkflowSection";
-import CTASection from "../components/home/CTASection";
+import StatsSection from "../components/home/StatsSection";
+import HowItWorksSection from "../components/home/HowItWorksSection";
+import CurriculumPreviewSection from "../components/home/CurriculumPreviewSection";
+import AboutPreviewSection from "../components/home/AboutPreviewSection";
+import FinalCTASection from "../components/home/FinalCTASection";
 
 const Home = () => {
   return (
     <MainLayout>
       <HeroSection />
       <FeatureSection />
-      <RoleSection />
-      <WorkflowSection />
-      <CTASection />
+      <StatsSection />
+      <HowItWorksSection />
+      <CurriculumPreviewSection />
+      <AboutPreviewSection />
+      <FinalCTASection />
     </MainLayout>
   );
 };
