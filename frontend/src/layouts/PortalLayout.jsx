@@ -1,15 +1,17 @@
-import DashboardLayout from "./DashboardLayout";
+import DashboardTopbar from "../components/navigation/DashboardTopbar";
 import DashboardTabs from "../components/common/DashboardTabs";
 
 const PortalLayout = ({ tabs, title, subtitle, children }) => {
   return (
-    <DashboardLayout>
-      <div className="flex flex-col gap-8 lg:flex-row">
-        <DashboardTabs tabs={tabs} title={title} subtitle={subtitle} />
+    <div className="flex min-h-screen bg-slate-50">
+      <DashboardTabs tabs={tabs} title={title} subtitle={subtitle} />
 
-        <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <DashboardTopbar title={title} subtitle={subtitle} />
+
+        <main className="p-8">{children}</main>
       </div>
-    </DashboardLayout>
+    </div>
   );
 };
 

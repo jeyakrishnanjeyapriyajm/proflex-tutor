@@ -1,23 +1,30 @@
-import API from "./api";
+import axiosInstance from "../api/axiosInstance";
 
 export const getTaskModules = async () => {
-  const { data } = await API.get("/task-giving/modules");
-  return data;
+  const response = await axiosInstance.get("/task-giving/modules");
+  return response.data;
 };
 
 export const startTaskModule = async (moduleId) => {
-  const { data } = await API.post(`/task-giving/modules/${moduleId}/start`);
-  return data;
+  const response = await axiosInstance.post(`/task-giving/start/${moduleId}`);
+  return response.data;
 };
 
 export const getCurrentTask = async (moduleId) => {
-  const { data } = await API.get(
-    `/task-giving/modules/${moduleId}/current-task`
-  );
-  return data;
+  const response = await axiosInstance.get(`/task-giving/current/${moduleId}`);
+  return response.data;
 };
 
 export const submitTaskAnswer = async (payload) => {
-  const { data } = await API.post("/task-giving/submit", payload);
-  return data;
+  const response = await axiosInstance.post("/task-giving/submit", payload);
+  return response.data;
 };
+
+const taskGivingService = {
+  getTaskModules,
+  startTaskModule,
+  getCurrentTask,
+  submitTaskAnswer,
+};
+
+export default taskGivingService;

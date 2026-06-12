@@ -1,169 +1,120 @@
-import {
-  BookOpen,
-  CheckCircle2,
-  BrainCircuit,
-  Code2,
-  Trophy,
-  FileText,
-  Video,
-  Flame,
-  Target,
-  BadgeCheck,
-  Star,
-} from "lucide-react";
+export const studentDashboardMockData = {
+  user: {
+    name: "Kogulan K.",
+    role: "First Year ICT",
+    avatar: "https://picsum.photos/seed/user/200/200",
+  },
 
-export const notifications = [
-  {
-    id: 1,
-    title: "New lesson available",
-    message: "Module 5: Multidimensional Arrays is now open.",
-    time: "2m ago",
-    read: false,
-    icon: BookOpen,
-    color: "text-sky-600",
-    bg: "bg-sky-50",
-  },
-  {
-    id: 2,
-    title: "Quiz completed",
-    message: "Your Loops MCQ practice was submitted successfully.",
-    time: "1h ago",
-    read: true,
-    icon: CheckCircle2,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-  },
-  {
-    id: 3,
-    title: "AI support updated",
-    message: "New hint recommendations are available for Arrays.",
-    time: "5h ago",
-    read: true,
-    icon: BrainCircuit,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-  },
-];
+  dashboard: {
+    courseTitle: "C Programming Fundamentals",
+    completion: 42,
+    xp: 1240,
+    streak: "12 Days",
+    level: 14,
+    completedModules: 12,
+    totalModules: 28,
+    exercises: 84,
+    timeSpent: "15h",
 
-export const masteryData = [
-  {
-    concept: "Variables & Data Types",
-    level: 86,
-  },
-  {
-    concept: "Conditional Statements",
-    level: 72,
-  },
-  {
-    concept: "Loops",
-    level: 58,
-  },
-  {
-    concept: "Arrays",
-    level: 41,
-  },
-];
+    resumeLearning: {
+      title: "Ready to Code?",
+      module: "Loops (For/While/Do)",
+      bonusXp: 50,
+      buttonText: "Resume Workspace",
+    },
 
-export const recentActivities = [
-  {
-    title: "Nested For Loops",
-    result: "Passed",
-    time: "Today, 10:42 AM",
-    icon: Code2,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-  },
-  {
-    title: "Conditionals Assessment",
-    result: "85%",
-    time: "Yesterday, 4:15 PM",
-    icon: BookOpen,
-    color: "text-sky-600",
-    bg: "bg-sky-50",
-  },
-  {
-    title: "Logic Master Badge",
-    result: "Unlocked",
-    time: "Mar 1, 2:30 PM",
-    icon: Trophy,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-  },
-];
+    conceptMastery: [
+      { concept: "Variables & Data Types", level: 92 },
+      { concept: "Conditional Statements", level: 78 },
+      { concept: "Loops", level: 65 },
+      { concept: "Arrays", level: 42 },
+    ],
 
-export const resources = [
-  {
-    title: "Introduction to C Arrays.pdf",
-    type: "PDF",
-    size: "2.4 MB",
-    icon: FileText,
-    color: "text-indigo-600",
-    bg: "bg-indigo-50",
-  },
-  {
-    title: "Loop Tracing Example.mp4",
-    type: "Video",
-    size: "45 MB",
-    icon: Video,
-    color: "text-rose-600",
-    bg: "bg-rose-50",
-  },
-];
+    recentActivities: [
+      {
+        type: "exercise",
+        title: "Nested For Loops",
+        result: "Passed",
+        time: "Today, 10:42 AM",
+      },
+      {
+        type: "quiz",
+        title: "Conditionals Assessment",
+        result: "85%",
+        time: "Yesterday, 4:15 PM",
+      },
+      {
+        type: "badge",
+        title: "Logic Master Badge",
+        result: "Unlocked",
+        time: "Mar 1, 2:30 PM",
+      },
+    ],
 
-export const messages = [
-  {
-    name: "Instructor",
-    time: "10:24 AM",
-    msg: "Your loop practice is improving. Review nested loop tracing again.",
-    avatar: "https://picsum.photos/seed/instructor/100/100",
-  },
-  {
-    name: "ProgFlex Support",
-    time: "Yesterday",
-    msg: "Your latest mastery report is now available.",
-    avatar: "https://picsum.photos/seed/support/100/100",
-  },
-];
+    resources: [
+      {
+        title: "Introduction to C Arrays.pdf",
+        type: "PDF",
+        size: "2.4 MB",
+      },
+      {
+        title: "Loop Tracing Example.mp4",
+        type: "Video",
+        size: "45 MB",
+      },
+    ],
 
-export const badges = [
-  {
-    id: 1,
-    name: "First Quiz",
-    earned: true,
-    icon: Star,
-    bg: "bg-amber-50",
-    color: "text-amber-600",
+    messages: [
+      {
+        name: "Instructor",
+        time: "10:24 AM",
+        message: "Your loop practice is improving. Review nested loop tracing again.",
+        avatar: "https://picsum.photos/seed/instructor/100/100",
+      },
+      {
+        name: "ProgFlex Support",
+        time: "Yesterday",
+        message: "Your latest mastery report is now available.",
+        avatar: "https://picsum.photos/seed/support/100/100",
+      },
+    ],
+
+    achievements: [
+      { id: 1, name: "First Quiz", earned: true },
+      { id: 2, name: "Loop Starter", earned: true },
+      { id: 3, name: "Code Practice", earned: true },
+      { id: 4, name: "Logic Master", earned: true },
+      { id: 5, name: "Array Expert", earned: false },
+      { id: 6, name: "Pointer Pro", earned: false },
+      { id: 7, name: "Debug King", earned: false },
+      { id: 8, name: "Final Master", earned: false },
+    ],
+
+    notifications: [
+      {
+        id: 1,
+        title: "New Lesson Available",
+        message: "Module 5: Multidimensional Arrays is now open.",
+        time: "2m ago",
+        read: false,
+        type: "lesson",
+      },
+      {
+        id: 2,
+        title: "Quiz Completed",
+        message: "Your Loops MCQ practice was submitted successfully.",
+        time: "1h ago",
+        read: true,
+        type: "success",
+      },
+      {
+        id: 3,
+        title: "AI Support Updated",
+        message: "New hint recommendations are available for Arrays.",
+        time: "5h ago",
+        read: true,
+        type: "system",
+      },
+    ],
   },
-  {
-    id: 2,
-    name: "Loop Starter",
-    earned: true,
-    icon: Flame,
-    bg: "bg-orange-50",
-    color: "text-orange-600",
-  },
-  {
-    id: 3,
-    name: "Code Practice",
-    earned: true,
-    icon: Code2,
-    bg: "bg-sky-50",
-    color: "text-sky-600",
-  },
-  {
-    id: 4,
-    name: "Mastery Badge",
-    earned: false,
-    icon: BadgeCheck,
-    bg: "bg-slate-50",
-    color: "text-slate-300",
-  },
-  {
-    id: 5,
-    name: "Target Achiever",
-    earned: false,
-    icon: Target,
-    bg: "bg-slate-50",
-    color: "text-slate-300",
-  },
-];
+};

@@ -1,20 +1,27 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL
+  baseURL: "http://localhost:5000/api",
 });
 
-axiosInstance.interceptors.request.use((config) => {
-  const storedUser = localStorage.getItem("authUser");
+// Add token from localStorage auth object
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const savedAuth = JSON.parse(localStorage.getItem("auth") || "{}");
 
-  if (storedUser) {
-    const parsedUser = JSON.parse(storedUser);
-    if (parsedUser?.token) {
-      config.headers.Authorization = `Bearer ${parsedUser.token}`;
+    const token =
+      savedAuth?.token ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("userToken");
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-  }
 
-  return config;
-});
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 export default axiosInstance;

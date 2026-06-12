@@ -1,43 +1,45 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { BrainCircuit, ChevronRight } from "lucide-react";
 
 const DashboardTabs = ({
-  tabs,
-  title = "Dashboard",
-  subtitle = "Workspace",
+  tabs = [],
+  title = "ProgFlex",
+  subtitle = "AI Coding Tutor",
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const currentPath = location.pathname;
-
-  const handleNavigate = (path) => {
-    navigate(path);
-  };
-
   return (
-    <aside className="w-full shrink-0 lg:w-72">
-      <div className="sticky top-28 rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm">
-        <div className="mb-5 border-b border-slate-100 px-2 pb-5">
-          <h2 className="text-lg font-black text-slate-900">{title}</h2>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            {subtitle}
-          </p>
+    <aside className="hidden min-h-screen w-80 shrink-0 border-r border-slate-100 bg-white p-6 lg:block">
+      <div className="sticky top-6">
+        <div className="mb-8 flex items-center gap-3 px-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-lg shadow-sky-200">
+            <BrainCircuit size={25} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-black tracking-tight text-slate-900">
+              {title}
+            </h2>
+            <p className="text-xs font-semibold text-slate-500">{subtitle}</p>
+          </div>
         </div>
 
-        <div className="flex gap-3 overflow-x-auto lg:flex-col lg:overflow-visible">
+        <div className="space-y-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = currentPath === tab.path;
+            const isActive =
+              location.pathname === tab.path ||
+              location.pathname.startsWith(`${tab.path}/`);
 
             return (
               <button
                 key={tab.path}
-                onClick={() => handleNavigate(tab.path)}
-                className={`group flex min-w-fit items-center justify-between gap-4 rounded-2xl px-4 py-4 text-left transition lg:w-full ${
+                onClick={() => navigate(tab.path)}
+                className={`group flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-4 text-left transition-all ${
                   isActive
                     ? "bg-sky-600 text-white shadow-lg shadow-sky-100"
-                    : "bg-slate-50 text-slate-600 hover:bg-sky-50 hover:text-sky-700"
+                    : "text-slate-600 hover:bg-sky-50 hover:text-sky-700"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -45,7 +47,7 @@ const DashboardTabs = ({
                     className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                       isActive
                         ? "bg-white/20 text-white"
-                        : "bg-white text-sky-600"
+                        : "bg-slate-50 text-sky-600 group-hover:bg-white"
                     }`}
                   >
                     {Icon && <Icon size={19} />}
@@ -56,7 +58,7 @@ const DashboardTabs = ({
 
                     {tab.description && (
                       <p
-                        className={`mt-0.5 hidden text-xs font-medium lg:block ${
+                        className={`mt-0.5 text-xs font-medium ${
                           isActive ? "text-sky-50" : "text-slate-400"
                         }`}
                       >
@@ -68,7 +70,7 @@ const DashboardTabs = ({
 
                 <ChevronRight
                   size={16}
-                  className={`hidden transition lg:block ${
+                  className={`transition ${
                     isActive
                       ? "text-white"
                       : "text-slate-300 group-hover:text-sky-500"
