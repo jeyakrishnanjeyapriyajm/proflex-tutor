@@ -4,6 +4,7 @@ const StudentModuleProgress = require("../models/StudentModuleProgress");
 const QuestionAttempt = require("../models/QuestionAttempt");
 
 const publicQuestionFields = "-correctAnswer -explanation";
+const axios = require("axios");
 
 const getStudentId = (req) => {
   return req.user?._id || req.user?.id;
@@ -200,7 +201,7 @@ const submitTaskAnswer = async (req, res) => {
     const isCorrect = question.correctAnswer === selectedAnswer;
 
     const selectedOption = question.options.find(
-      (option) => option.label === selectedAnswer
+      (option) => option.label === selectedAnswer,
     );
 
     const misconceptionTag = selectedOption?.misconceptionTag || "";
@@ -229,7 +230,7 @@ const submitTaskAnswer = async (req, res) => {
     // CASE 1: CORRECT ANSWER
     if (isCorrect) {
       const alreadyCompleted = progress.completedQuestionIds.some(
-        (id) => id.toString() === questionId
+        (id) => id.toString() === questionId,
       );
 
       if (!alreadyCompleted) {
@@ -349,9 +350,143 @@ const submitTaskAnswer = async (req, res) => {
   }
 };
 
+// ─── Difficulty Analysis ─────────────────────────────────────────────────────
+// Update runDifficultyAnalysis to fetch 5 questions instead of 3
+const runDifficultyAnalysis = async (req, res) => {
+  try {
+    const {
+      questionId,
+      concept,
+      difficulty,
+      selectedAnswer,
+      correctAnswer,
+      attemptNo,
+      timeTakenSeconds,
+      hintUsed,
+      misconceptionTag,
+    } = req.body;
+
+    const studentId = getStudentId(req);
+    const pythonUrl = process.env.PYTHON_MODEL_URL;
+
+    const modelRes = await axios.post(`${pythonUrl}/analyze`, {
+      student_id: studentId.toString(),
+      question_id: questionId,
+      concept,
+      difficulty,
+      selected_answer: selectedAnswer,
+      correct_answer: correctAnswer,
+      attempt_no: Number(attemptNo) || 3,
+      time_taken_seconds: Number(timeTakenSeconds) || 0,
+      hint_used: Boolean(hintUsed),
+      misconception_tag: misconceptionTag || "unknown",
+    });
+
+    const {
+      recommended_next_difficulty,
+      recommended_support_action,
+      mastery_level,
+      bkt_mastery_probability,
+    } = modelRes.data;
+
+    let suggestedQuestions = [];
+
+    // Only show 5 suggestions if recommended difficulty is easy
+    if (recommended_next_difficulty === "easy") {
+      suggestedQuestions = await Question.find({
+        concept: concept,
+        difficulty: "easy",
+        _id: { $ne: questionId },
+        isActive: true,
+      })
+        .limit(5)
+        .select(
+          "_id questionText options codeSnippet difficulty concept correctAnswer hint",
+        );
+    }
+
+    return res.status(200).json({
+      success: true,
+      recommended_next_difficulty,
+      recommended_support_action,
+      mastery_level,
+      bkt_mastery_probability,
+      suggestedQuestions,
+    });
+  } catch (error) {
+    console.error("DIFFICULTY ANALYSIS ERROR:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Difficulty analysis failed. Is Python model running?",
+    });
+  }
+};
+
+// NEW endpoint — handle the result after all 5 suggestions are done
+const handleSuggestedRoundResult = async (req, res) => {
+  try {
+    const studentId = getStudentId(req);
+    const { moduleId, correctCount, totalQuestions, stuckQuestionId } =
+      req.body;
+
+    const progress = await StudentModuleProgress.findOne({
+      student: studentId,
+      module: moduleId,
+    });
+
+    if (!progress) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress not found",
+      });
+    }
+
+    const passed = correctCount >= 3; // 3 out of 5 required
+
+    if (passed) {
+      // ── PASS: let them continue the stuck question ──────────────────────
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        passed: true,
+        message: `Great! You got ${correctCount}/${totalQuestions}. You can continue.`,
+        nextAction: "CONTINUE_STUCK_QUESTION",
+      });
+    } else {
+      // ── FAIL: reset module, show low mastery, restart from Q1 ───────────
+      progress.status = "in_progress";
+      progress.currentOrderNo = 1;
+      progress.score = 0;
+      progress.completedQuestionIds = [];
+      progress.stuckQuestion = null;
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        passed: false,
+        message: `You got ${correctCount}/${totalQuestions}. Your mastery on this concept is Low.`,
+        masteryLevel: "low",
+        nextAction: "RESTART_MODULE",
+      });
+    }
+  } catch (error) {
+    console.error("SUGGESTED ROUND RESULT ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process round result",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getLearningModules,
   startModule,
   getCurrentTask,
   submitTaskAnswer,
+  runDifficultyAnalysis,
+  handleSuggestedRoundResult,
 };
