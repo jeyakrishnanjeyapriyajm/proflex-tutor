@@ -1,4 +1,3 @@
-import StudentTopbar from "./StudentTopbar";
 import ProgressSummary from "./ProgressSummary";
 import ConceptMastery from "./ConceptMastery";
 import RecentActivity from "./RecentActivity";
@@ -8,13 +7,10 @@ import RecentMessages from "./RecentMessages";
 import Achievements from "./Achievements";
 
 const UserOverview = ({ data }) => {
-  const user = data?.user;
   const dashboard = data?.dashboard;
 
   return (
     <div className="space-y-8">
-      <StudentTopbar user={user} dashboard={dashboard} />
-
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="space-y-8 lg:col-span-8">
           <ProgressSummary dashboard={dashboard} />
@@ -23,7 +19,7 @@ const UserOverview = ({ data }) => {
         </div>
 
         <div className="space-y-8 lg:col-span-4">
-          <ResumeLearningCard />
+          <ResumeLearningCard data={dashboard?.resumeLearning} />
           <LatestResources items={dashboard?.resources || []} />
           <RecentMessages items={dashboard?.messages || []} />
           <Achievements items={dashboard?.achievements || []} />

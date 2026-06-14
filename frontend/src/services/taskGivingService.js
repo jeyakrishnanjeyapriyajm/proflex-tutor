@@ -21,3 +21,16 @@ export const submitTaskAnswer = async (payload) => {
   const { data } = await API.post("/task-giving/submit", payload);
   return data;
 };
+
+export const submitSuggestedRoundResult = async (payload) => {
+  const { data } = await API.post(
+    "/task-giving/suggested-round-result",
+    payload
+  );
+  return data;
+};
+
+export const submitModelReward = async (payload) => {
+  const { data } = await API.post("/model/support-reward", payload);
+  return data;
+};

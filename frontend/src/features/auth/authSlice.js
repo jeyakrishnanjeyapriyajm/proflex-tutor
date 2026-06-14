@@ -39,11 +39,15 @@ const authSlice = createSlice({
     },
 
     logout: (state) => {
-      state.user = null;
-      state.token = null;
-      state.isAuthenticated = false;
-      localStorage.removeItem("auth");
-    },
+  state.user = null;
+  state.token = null;
+  state.isAuthenticated = false;
+
+  localStorage.removeItem("auth");
+  localStorage.removeItem("token");
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("userToken");
+},
   },
 });
 

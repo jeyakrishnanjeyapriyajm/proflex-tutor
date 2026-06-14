@@ -20,6 +20,8 @@ import StudentResources from "../pages/StudentResources";
 import StudentMessages from "../pages/StudentMessages";
 import StudentSettings from "../pages/StudentSettings";
 
+import AdminDashboard from "../pages/AdminDashboard";
+
 import RoleRoute from "../components/auth/RoleRoute";
 
 const AppRoutes = () => {
@@ -45,7 +47,6 @@ const AppRoutes = () => {
         element={<Register defaultRole="instructor" />}
       />
 
-      {/* Old register route redirect */}
       <Route
         path="/register"
         element={<Navigate to="/register/student" replace />}
@@ -127,10 +128,25 @@ const AppRoutes = () => {
         }
       />
 
+      {/* Admin Portal */}
+      <Route
+        path="/admin/dashboard"
+        element={
+          <RoleRoute allowedRoles={["admin"]}>
+            <AdminDashboard />
+          </RoleRoute>
+        }
+      />
+
       {/* Old route redirects */}
       <Route
         path="/user-dashboard"
         element={<Navigate to="/student/dashboard" replace />}
+      />
+
+      <Route
+        path="/admin-dashboard"
+        element={<Navigate to="/admin/dashboard" replace />}
       />
 
       <Route
@@ -139,19 +155,8 @@ const AppRoutes = () => {
       />
 
       <Route
-        path="/admin-dashboard"
-        element={<Navigate to="/unauthorized" replace />}
-      />
-
-      {/* Temporary lecturer/admin routes until pages are created */}
-      <Route
         path="/lecturer/*"
         element={<Navigate to="/approval-pending" replace />}
-      />
-
-      <Route
-        path="/admin/*"
-        element={<Navigate to="/unauthorized" replace />}
       />
 
       {/* 404 */}
