@@ -12,26 +12,34 @@ const decisionLogSchema = new mongoose.Schema(
     module: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "LearningModule",
-      default: null,
+      required: true,
     },
 
     question: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Question",
-      default: null,
+      required: true,
     },
 
     concept: {
       type: String,
       required: true,
       trim: true,
-      index: true,
     },
 
-    currentDifficulty: {
+    isCorrect: {
+      type: Boolean,
+      default: false,
+    },
+
+    isStuck: {
+      type: Boolean,
+      default: false,
+    },
+
+    stuckReason: {
       type: String,
-      enum: ["easy", "medium", "hard"],
-      required: true,
+      default: "",
     },
 
     selectedAnswer: {
@@ -42,11 +50,6 @@ const decisionLogSchema = new mongoose.Schema(
     correctAnswer: {
       type: String,
       default: "",
-    },
-
-    isCorrect: {
-      type: Boolean,
-      default: false,
     },
 
     attemptNo: {
@@ -74,10 +77,25 @@ const decisionLogSchema = new mongoose.Schema(
       default: 0,
     },
 
+    behaviorMasteryProbability: {
+      type: Number,
+      default: 0,
+    },
+
+    finalMasteryProbability: {
+      type: Number,
+      default: 0,
+    },
+
     masteryLevel: {
       type: String,
       enum: ["low", "medium", "high", "unknown"],
       default: "unknown",
+    },
+
+    recommendedSupportAction: {
+      type: String,
+      default: "",
     },
 
     recommendedNextDifficulty: {
@@ -86,17 +104,17 @@ const decisionLogSchema = new mongoose.Schema(
       default: "unknown",
     },
 
-    recommendedSupportAction: {
+    qState: {
+      type: Array,
+      default: [],
+    },
+
+    qAction: {
       type: String,
-      default: "unknown",
+      default: "",
     },
 
-    modelState: {
-      type: Object,
-      default: {},
-    },
-
-    modelReward: {
+    reward: {
       type: Number,
       default: 0,
     },
@@ -108,13 +126,11 @@ const decisionLogSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["recommended", "completed", "failed"],
+      enum: ["recommended", "reward_updated", "completed"],
       default: "recommended",
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("DecisionLog", decisionLogSchema);

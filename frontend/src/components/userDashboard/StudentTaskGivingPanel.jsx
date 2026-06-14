@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   ClipboardCheck,
   Clock,
   Lightbulb,
@@ -22,14 +21,12 @@ import {
   startTaskModule,
   getCurrentTask,
   submitTaskAnswer,
-  runDifficultyAnalysis,
   submitSuggestedRoundResult,
 } from "../../services/taskGivingService";
 
-const PASS_THRESHOLD = 3; // need 3 out of 5 correct
+const PASS_THRESHOLD = 3;
 
 const StudentTaskGivingPanel = () => {
-  // ── existing state ───────────────────────────────────────────────────────
   const [modules, setModules] = useState([]);
   const [selectedModule, setSelectedModule] = useState(null);
   const [task, setTask] = useState(null);
@@ -41,13 +38,6 @@ const StudentTaskGivingPanel = () => {
   const [loading, setLoading] = useState(false);
   const [loadingModules, setLoadingModules] = useState(true);
 
-  const handleExitQuestion = () => {
-    setTask(null);
-    setSelectedModule(null);
-    resetTaskUi();
-  };
-
-  // ── suggested questions state ────────────────────────────────────────────
   const [analysisResult, setAnalysisResult] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [suggestedIndex, setSuggestedIndex] = useState(0);
@@ -56,12 +46,33 @@ const StudentTaskGivingPanel = () => {
   const [suggestedMessage, setSuggestedMessage] = useState("");
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
-  // ── NEW: scoring + round result state ────────────────────────────────────
   const [correctCount, setCorrectCount] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
-  const [roundResult, setRoundResult] = useState(null); // null | "pass" | "fail"
+  const [roundResult, setRoundResult] = useState(null);
 
-  // ── helpers ──────────────────────────────────────────────────────────────
+  const resetTaskUi = () => {
+    setSelectedAnswer("");
+    setStuckData(null);
+    setSupport(null);
+    setMessage("");
+    setAnalysisResult(null);
+    setSuggestedQuestions([]);
+    setSuggestedIndex(0);
+    setInSuggestedMode(false);
+    setSuggestedAnswer("");
+    setSuggestedMessage("");
+    setCorrectCount(0);
+    setAnsweredCount(0);
+    setRoundResult(null);
+    setLoadingAnalysis(false);
+  };
+
+  const handleExitQuestion = () => {
+    setTask(null);
+    setSelectedModule(null);
+    resetTaskUi();
+  };
+
   const loadModules = async () => {
     try {
       setLoadingModules(true);
@@ -73,24 +84,6 @@ const StudentTaskGivingPanel = () => {
     } finally {
       setLoadingModules(false);
     }
-  };
-
-  const resetTaskUi = () => {
-    setSelectedAnswer("");
-    setStuckData(null);
-    setSupport(null);
-    setMessage("");
-    // suggested mode resets
-    setAnalysisResult(null);
-    setSuggestedQuestions([]);
-    setSuggestedIndex(0);
-    setInSuggestedMode(false);
-    setSuggestedAnswer("");
-    setSuggestedMessage("");
-    // round result resets
-    setCorrectCount(0);
-    setAnsweredCount(0);
-    setRoundResult(null);
   };
 
   const handleStartModule = async (module) => {
@@ -119,9 +112,11 @@ const StudentTaskGivingPanel = () => {
 
   const handleLoadCurrentTask = async () => {
     if (!selectedModule?._id) return;
+
     try {
       setLoading(true);
       resetTaskUi();
+
       const data = await getCurrentTask(selectedModule._id);
 
       if (data.completed) {
@@ -138,12 +133,81 @@ const StudentTaskGivingPanel = () => {
     }
   };
 
-  // ── submit main module answer ─────────────────────────────────────────────
+  const getSupportText = (supportAction, responseSupport) => {
+    if (!responseSupport) return "";
+
+    if (supportAction === "simple_hint") {
+      return responseSupport.hint || "Review the basic idea and try again.";
+    }
+
+    if (supportAction === "detailed_hint") {
+      return (
+        responseSupport.detailedHint ||
+        responseSupport.hint ||
+        "Use the detailed hint and retry."
+      );
+    }
+
+    if (supportAction === "explanation") {
+      return (
+        responseSupport.explanation ||
+        responseSupport.detailedHint ||
+        responseSupport.hint ||
+        "Read the explanation and retry."
+      );
+    }
+
+    if (supportAction === "worked_example") {
+      return (
+        responseSupport.explanation ||
+        responseSupport.detailedHint ||
+        "Study this worked example style explanation and retry."
+      );
+    }
+
+    if (supportAction === "code_tracing_steps") {
+      return (
+        responseSupport.explanation ||
+        responseSupport.detailedHint ||
+        "Trace the code step by step before retrying."
+      );
+    }
+
+    if (supportAction === "revision_note") {
+      return (
+        responseSupport.detailedHint ||
+        responseSupport.explanation ||
+        "Revise this concept before retrying."
+      );
+    }
+
+    if (supportAction === "easier_task") {
+      return (
+        responseSupport.hint ||
+        "Try an easier related task to rebuild the concept."
+      );
+    }
+
+    if (supportAction === "similar_task") {
+      return (
+        responseSupport.hint ||
+        "Try a similar task to strengthen the same concept."
+      );
+    }
+
+    if (supportAction === "harder_challenge") {
+      return "You are ready for a harder challenge.";
+    }
+
+    return responseSupport.hint || responseSupport.explanation || "";
+  };
+
   const handleSubmitAnswer = async () => {
     if (!selectedAnswer) {
       setMessage("Please select one answer.");
       return;
     }
+
     if (!selectedModule?._id || !task?._id) {
       setMessage("Module or task is missing.");
       return;
@@ -161,28 +225,67 @@ const StudentTaskGivingPanel = () => {
         questionId: task._id,
         selectedAnswer,
         timeTakenSeconds,
+        hintRequested: false,
       });
 
-      setMessage(data.message);
+      setMessage(data.message || "");
 
       if (data.nextAction === "NEXT_SEQUENTIAL_TASK") {
         setTask(data.nextQuestion);
         setSelectedAnswer("");
         setSupport(null);
         setStuckData(null);
+        setAnalysisResult(null);
         setStartedAt(Date.now());
+        return;
       }
 
-      if (data.nextAction === "SHOW_HINT") {
+      if (data.nextAction === "RETRY_CURRENT_TASK") {
         setSelectedAnswer("");
-        setSupport(data.support || null);
+        setSupport(null);
         setStuckData(null);
+        setAnalysisResult(data.difficultyAnalysis || null);
+        setStartedAt(Date.now());
+        return;
       }
 
-      if (data.nextAction === "SHOW_EXPLANATION") {
+      if (data.nextAction === "SHOW_Q_LEARNING_SUPPORT") {
+        const supportAction = data.decisionMaking?.recommendedSupportAction;
+        const supportText = getSupportText(supportAction, data.support);
+
         setSelectedAnswer("");
-        setSupport(data.support || null);
-        setStuckData(null);
+
+        setStuckData({
+          concept: data.difficultyAnalysis?.concept || data.support?.concept,
+          difficulty:
+            data.difficultyAnalysis?.effectiveDifficulty ||
+            data.support?.difficulty,
+          attemptNo: data.attemptNo,
+          timeTakenSeconds,
+          misconceptionTag: data.support?.misconceptionTag || "unknown",
+          stuckReason: data.stuckAnalysis?.stuckReason || data.stuckReason,
+        });
+
+        setAnalysisResult({
+          mastery_level: data.difficultyAnalysis?.masteryLevel,
+          recommended_next_difficulty:
+            data.decisionMaking?.recommendedNextDifficulty,
+          recommended_support_action: supportAction,
+          decisionLogId: data.decisionMaking?.decisionLogId,
+        });
+
+        setSupport({
+          type: supportAction || "simple_hint",
+          text: supportText,
+        });
+
+        setMessage(
+          `Q-learning selected support: ${
+            supportAction?.replace(/_/g, " ") || "support"
+          }`,
+        );
+
+        return;
       }
 
       if (data.nextAction === "MODULE_COMPLETED") {
@@ -190,41 +293,8 @@ const StudentTaskGivingPanel = () => {
         setSelectedAnswer("");
         setSupport(null);
         setStuckData(null);
-      }
-
-      // ── 3 wrong attempts → call Python model ─────────────────────────────
-      if (data.nextAction === "SEND_TO_DIFFICULTY_ANALYSIS") {
-        setSelectedAnswer("");
-        setSupport(null);
-        setStuckData(data.stuckPayload);
-
-        setLoadingAnalysis(true);
-        try {
-          const analysis = await runDifficultyAnalysis({
-            questionId: data.stuckPayload.questionId,
-            concept: data.stuckPayload.concept,
-            difficulty: data.stuckPayload.difficulty,
-            selectedAnswer: data.stuckPayload.selectedAnswer,
-            correctAnswer: data.stuckPayload.correctAnswer,
-            attemptNo: data.stuckPayload.attemptNo,
-            timeTakenSeconds: data.stuckPayload.timeTakenSeconds,
-            hintUsed: data.stuckPayload.hintUsed,
-            misconceptionTag: data.stuckPayload.misconceptionTag,
-          });
-
-          setAnalysisResult(analysis);
-          setSuggestedQuestions(analysis.suggestedQuestions || []);
-          setSuggestedIndex(0);
-          setCorrectCount(0);
-          setAnsweredCount(0);
-          setRoundResult(null);
-          setInSuggestedMode(true);
-          setSuggestedMessage("");
-        } catch {
-          setMessage("Model analysis failed. Please try again.");
-        } finally {
-          setLoadingAnalysis(false);
-        }
+        setAnalysisResult(data.difficultyAnalysis || null);
+        return;
       }
     } catch (error) {
       setMessage(error.response?.data?.message || "Could not submit answer.");
@@ -233,7 +303,6 @@ const StudentTaskGivingPanel = () => {
     }
   };
 
-  // ── submit suggested question answer ─────────────────────────────────────
   const handleSuggestedSubmit = async () => {
     if (!suggestedAnswer) {
       setSuggestedMessage("Please select an answer.");
@@ -241,6 +310,12 @@ const StudentTaskGivingPanel = () => {
     }
 
     const current = suggestedQuestions[suggestedIndex];
+
+    if (!current) {
+      setSuggestedMessage("No suggested question found.");
+      return;
+    }
+
     const isCorrect = suggestedAnswer === current.correctAnswer;
 
     const newCorrectCount = isCorrect ? correctCount + 1 : correctCount;
@@ -253,7 +328,6 @@ const StudentTaskGivingPanel = () => {
     const isLastQuestion = suggestedIndex === suggestedQuestions.length - 1;
 
     if (!isLastQuestion) {
-      // Move to next question after short delay
       setTimeout(() => {
         setSuggestedIndex((i) => i + 1);
         setSuggestedAnswer("");
@@ -262,7 +336,6 @@ const StudentTaskGivingPanel = () => {
       return;
     }
 
-    // ── All 5 questions answered — decide pass/fail ─────────────────────────
     setTimeout(async () => {
       try {
         setLoading(true);
@@ -272,9 +345,11 @@ const StudentTaskGivingPanel = () => {
           correctCount: newCorrectCount,
           totalQuestions: suggestedQuestions.length,
           stuckQuestionId: stuckData?.questionId,
+          decisionLogId: analysisResult?.decisionLogId,
+          supportAction: analysisResult?.recommended_support_action,
         });
 
-        if (result.nextAction === "CONTINUE_STUCK_QUESTION") {
+        if (result.nextAction === "CONTINUE_MAIN_SEQUENCE") {
           setRoundResult("pass");
           setSuggestedMessage(result.message);
 
@@ -284,14 +359,9 @@ const StudentTaskGivingPanel = () => {
           }, 2000);
         }
 
-        if (result.nextAction === "RESTART_MODULE") {
+        if (result.nextAction === "NEEDS_MORE_SUPPORT") {
           setRoundResult("fail");
           setSuggestedMessage(result.message);
-
-          setTimeout(() => {
-            resetTaskUi();
-            handleStartModule(selectedModule);
-          }, 2500);
         }
       } catch (error) {
         setMessage(
@@ -309,12 +379,9 @@ const StudentTaskGivingPanel = () => {
 
   const isQuestionPageOpen = !!selectedModule;
 
-  // ── render ────────────────────────────────────────────────────────────────
-
   return (
     <div className="flex-1 bg-slate-50/50 font-sans">
       <div className="mx-auto max-w-6xl space-y-8">
-        {/* Module Selection Page */}
         {!isQuestionPageOpen && (
           <section>
             <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -415,10 +482,8 @@ const StudentTaskGivingPanel = () => {
           </section>
         )}
 
-        {/* Question Workspace Page */}
         {isQuestionPageOpen && (
           <section className="space-y-8">
-            {/* Workspace Header */}
             <div className="flex flex-col gap-5 rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between md:p-8">
               <div className="flex items-start gap-4">
                 <button
@@ -478,7 +543,6 @@ const StudentTaskGivingPanel = () => {
               <Loading text="Opening selected module..." />
             )}
 
-            {/* Main Task Question */}
             {task && !inSuggestedMode && (
               <div
                 className="mx-auto max-w-5xl"
@@ -671,7 +735,7 @@ const StudentTaskGivingPanel = () => {
 
                       <span className="flex items-center gap-1">
                         <Trophy size={14} />
-                        Hint → Explanation → Analysis
+                        BKT → Behavior → Q-learning
                       </span>
                     </div>
 
@@ -693,43 +757,85 @@ const StudentTaskGivingPanel = () => {
               </div>
             )}
 
-            {/* Hint / Explanation */}
             {support && !inSuggestedMode && (
-              <div
-                className={`rounded-[2rem] border p-6 shadow-sm ${
-                  support.type === "hint"
-                    ? "border-amber-100 bg-amber-50 text-amber-800"
-                    : "border-sky-100 bg-sky-50 text-sky-800"
-                }`}
-              >
+              <div className="rounded-[2rem] border border-sky-100 bg-sky-50 p-6 text-sky-800 shadow-sm">
                 <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest">
-                  {support.type === "hint" ? (
+                  {support.type === "simple_hint" ? (
                     <>
                       <Lightbulb size={20} />
-                      Remediation Hint
+                      Simple Hint
                     </>
                   ) : (
                     <>
                       <BookOpen size={20} />
-                      Detailed Explanation
+                      {support.type?.replace(/_/g, " ") || "Support"}
                     </>
                   )}
                 </div>
 
                 <p className="text-sm font-semibold leading-7">
-                  {support.text}
+                  {support.text || "Use this support and try again."}
                 </p>
               </div>
             )}
 
-            {/* General Message */}
             {message && !inSuggestedMode && (
               <div className="rounded-[2rem] border border-slate-100 bg-white p-6 text-sm font-bold text-slate-600 shadow-sm">
                 {message}
               </div>
             )}
 
-            {/* Stuck Detected */}
+            {analysisResult && !inSuggestedMode && (
+              <div className="rounded-[2.5rem] border border-purple-200 bg-purple-50 p-8 shadow-sm shadow-purple-100">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-purple-600">
+                    <Sparkles size={24} />
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600">
+                      AI Recommendation
+                    </span>
+                    <h3 className="text-xl font-black text-purple-950">
+                      Q-learning Support Decision
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-white/70 p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
+                      Mastery Level
+                    </p>
+                    <p className="font-black capitalize text-purple-900">
+                      {analysisResult.mastery_level || "unknown"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-white/70 p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
+                      Recommended Difficulty
+                    </p>
+                    <p className="font-black capitalize text-purple-900">
+                      {analysisResult.recommended_next_difficulty || "current"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-white/70 p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
+                      Support Action
+                    </p>
+                    <p className="font-black capitalize text-purple-900">
+                      {analysisResult.recommended_support_action?.replace(
+                        /_/g,
+                        " ",
+                      ) || "support"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {stuckData && !inSuggestedMode && (
               <div className="rounded-[2.5rem] border border-orange-200 bg-orange-50 p-8 shadow-sm shadow-orange-100">
                 <div className="mb-5 flex items-center gap-3 text-orange-800">
@@ -740,7 +846,7 @@ const StudentTaskGivingPanel = () => {
                   <div>
                     <h3 className="text-xl font-black">Stuck Detected</h3>
                     <p className="text-sm font-semibold text-orange-700">
-                      Sending performance data to Difficulty Analysis.
+                      BKT + behavior state sent to Q-learning support model.
                     </p>
                   </div>
                 </div>
@@ -795,78 +901,15 @@ const StudentTaskGivingPanel = () => {
               </div>
             )}
 
-            {/* Loading Analysis */}
             {loadingAnalysis && (
               <div className="rounded-[2rem] border border-purple-100 bg-purple-50 p-8 text-center shadow-sm">
                 <Sparkles className="mx-auto mb-3 text-purple-600" size={30} />
                 <p className="text-sm font-black uppercase tracking-widest text-purple-700">
                   Analysing learning pattern...
                 </p>
-                <p className="mt-2 text-sm font-medium text-purple-600">
-                  Fetching suggested questions from the adaptive difficulty
-                  model.
-                </p>
               </div>
             )}
 
-            {/* AI Recommendation */}
-            {inSuggestedMode && analysisResult && (
-              <div className="rounded-[2.5rem] border border-purple-200 bg-purple-50 p-8 shadow-sm shadow-purple-100">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-purple-600">
-                    <Sparkles size={24} />
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600">
-                      AI Recommendation
-                    </span>
-                    <h3 className="text-xl font-black text-purple-950">
-                      Personalized Practice Round
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Mastery Level
-                    </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.mastery_level}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Recommended Difficulty
-                    </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.recommended_next_difficulty}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Support Action
-                    </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.recommended_support_action?.replace(
-                        /_/g,
-                        " ",
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="mt-5 text-sm font-semibold leading-7 text-purple-700">
-                  Answer {suggestedQuestions.length} practice questions. You
-                  need {PASS_THRESHOLD} correct answers to continue your module.
-                </p>
-              </div>
-            )}
-
-            {/* Pass Result */}
             {roundResult === "pass" && (
               <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 text-center shadow-sm">
                 <Trophy className="mx-auto mb-3 text-emerald-600" size={36} />
@@ -877,7 +920,6 @@ const StudentTaskGivingPanel = () => {
               </div>
             )}
 
-            {/* Fail Result */}
             {roundResult === "fail" && (
               <div className="rounded-[2.5rem] border border-orange-200 bg-orange-50 p-8 shadow-sm">
                 <div className="mb-2 flex items-center gap-2 text-orange-800">
@@ -887,13 +929,11 @@ const StudentTaskGivingPanel = () => {
 
                 <p className="text-sm font-semibold leading-7 text-orange-800">
                   You got {correctCount}/{suggestedQuestions.length} correct.
-                  Restarting this module from Question 1 to rebuild your
-                  foundation.
+                  More support is needed.
                 </p>
               </div>
             )}
 
-            {/* Suggested Question Card */}
             {inSuggestedMode &&
               suggestedQuestions.length > 0 &&
               !roundResult && (

@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const questionDifficultyRoutes = require("./routes/questionDifficultyRoutes");
+const modelRewardRoutes = require("./routes/modelRewardRoutes");
 
 const app = express();
 
@@ -20,6 +21,8 @@ app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/difficulty", difficultyRoutes);
 app.use("/api/question-difficulty", questionDifficultyRoutes);
+
+app.use("/api/model", modelRewardRoutes);
 
 app.get("/", (req, res) => {
   res.send("ProgFlex API is running");

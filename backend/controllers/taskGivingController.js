@@ -1,10 +1,18 @@
 const {
   calculateQuestionDifficulty,
 } = require("../services/questionDifficultyService");
+
 const LearningModule = require("../models/LearningModule");
 const Question = require("../models/Question");
 const StudentModuleProgress = require("../models/StudentModuleProgress");
 const QuestionAttempt = require("../models/QuestionAttempt");
+
+const StudentConceptMastery = require("../models/StudentConceptMastery");
+const DecisionLog = require("../models/DecisionLog");
+
+const {
+  analyzeStudentInteraction,
+} = require("../services/pythonModelService");
 
 const publicQuestionFields = "-correctAnswer -explanation";
 
@@ -42,7 +50,6 @@ const detectStuckStatus = ({
   timeTakenSeconds,
   difficulty,
   hintRequested,
-  skipped,
 }) => {
   const timeStatus = getTimeStatus(timeTakenSeconds, difficulty);
 
@@ -78,14 +85,6 @@ const detectStuckStatus = ({
     };
   }
 
-  if (Boolean(skipped)) {
-    return {
-      isStuck: true,
-      stuckReason: "question_skipped",
-      timeStatus,
-    };
-  }
-
   return {
     isStuck: false,
     stuckReason: "",
@@ -99,6 +98,185 @@ const findCurrentQuestion = async (moduleId, orderNo) => {
     orderNo,
     isActive: true,
   }).select(publicQuestionFields);
+};
+
+const getOrCreateConceptMastery = async (studentId, concept) => {
+  let mastery = await StudentConceptMastery.findOne({
+    student: studentId,
+    concept,
+  });
+
+  if (!mastery) {
+    mastery = await StudentConceptMastery.create({
+      student: studentId,
+      concept,
+      masteryProbability: 0.3,
+      masteryLevel: "low",
+    });
+  }
+
+  return mastery;
+};
+
+const buildPythonPayload = ({
+  studentId,
+  moduleId,
+  question,
+  selectedAnswer,
+  attemptNo,
+  timeTakenSeconds,
+  hintRequested,
+  misconceptionTag,
+  mastery,
+  updatedQuestion,
+}) => {
+  const previousWrongRate =
+    mastery.totalAttempts > 0
+      ? mastery.wrongAttempts / mastery.totalAttempts
+      : 0;
+
+  const previousHintRate =
+    mastery.totalAttempts > 0
+      ? mastery.hintUsedCount / mastery.totalAttempts
+      : 0;
+
+  return {
+    student_id: String(studentId),
+    question_id: String(question._id),
+    module_id: String(moduleId),
+
+    concept: question.concept,
+
+    selected_answer: selectedAnswer,
+    correct_answer: question.correctAnswer,
+
+    attempt_no: Number(attemptNo),
+    time_taken_seconds: Number(timeTakenSeconds) || 0,
+    hint_used: Boolean(hintRequested),
+    misconception_tag: misconceptionTag || "unknown",
+
+    difficulty: question.difficulty,
+    lecturer_difficulty: question.difficulty,
+    dynamic_difficulty: updatedQuestion.dynamicDifficulty || "not_enough_data",
+    effective_difficulty:
+      updatedQuestion.effectiveDifficulty || question.difficulty,
+
+    question_difficulty_score: updatedQuestion.difficultyScore || 0,
+    question_correct_rate: updatedQuestion.difficultyStats?.correctRate || 0,
+    question_attempt_count: updatedQuestion.attemptCount || 0,
+    question_difficulty_source: updatedQuestion.difficultySource || "lecturer",
+
+    student_previous_concept_attempts: mastery.totalAttempts || 0,
+    student_previous_concept_wrong_rate: previousWrongRate,
+    student_previous_concept_stuck_count: mastery.stuckCount || 0,
+    student_previous_hint_rate: previousHintRate,
+    student_previous_average_time: mastery.averageTimeSeconds || 0,
+
+    previous_mastery_probability: mastery.masteryProbability || 0.3,
+  };
+};
+
+const updateConceptMasteryFromModel = async ({
+  mastery,
+  isCorrect,
+  hintRequested,
+  timeTakenSeconds,
+  modelResult,
+}) => {
+  const oldTotalAttempts = mastery.totalAttempts || 0;
+  const oldAverageTime = mastery.averageTimeSeconds || 0;
+  const newTotalAttempts = oldTotalAttempts + 1;
+
+  mastery.totalAttempts = newTotalAttempts;
+
+  if (isCorrect) {
+    mastery.correctAttempts = (mastery.correctAttempts || 0) + 1;
+  } else {
+    mastery.wrongAttempts = (mastery.wrongAttempts || 0) + 1;
+  }
+
+  if (Boolean(hintRequested)) {
+    mastery.hintUsedCount = (mastery.hintUsedCount || 0) + 1;
+  }
+
+  if (modelResult?.is_stuck) {
+    mastery.stuckCount = (mastery.stuckCount || 0) + 1;
+  }
+
+  mastery.averageTimeSeconds =
+    (oldAverageTime * oldTotalAttempts + (Number(timeTakenSeconds) || 0)) /
+    newTotalAttempts;
+
+  mastery.masteryProbability =
+    modelResult?.final_mastery_probability ??
+    modelResult?.bkt_mastery_probability ??
+    mastery.masteryProbability;
+
+  mastery.masteryLevel = modelResult?.mastery_level || mastery.masteryLevel;
+
+  mastery.lastSupportAction =
+    modelResult?.recommended_support_action || mastery.lastSupportAction;
+
+  mastery.lastRecommendedDifficulty =
+    modelResult?.recommended_next_difficulty ||
+    mastery.lastRecommendedDifficulty;
+
+  mastery.lastUpdated = new Date();
+
+  await mastery.save();
+
+  return mastery;
+};
+
+const saveDecisionLog = async ({
+  studentId,
+  moduleId,
+  question,
+  selectedAnswer,
+  isCorrect,
+  attemptNo,
+  timeTakenSeconds,
+  hintRequested,
+  misconceptionTag,
+  modelResult,
+  stuckAnalysis,
+}) => {
+  const decisionLog = await DecisionLog.create({
+    student: studentId,
+    module: moduleId,
+    question: question._id,
+    concept: question.concept,
+
+    isCorrect,
+    isStuck: Boolean(modelResult?.is_stuck),
+    stuckReason: modelResult?.stuck_reason || stuckAnalysis?.stuckReason || "",
+
+    selectedAnswer,
+    correctAnswer: question.correctAnswer,
+
+    attemptNo,
+    timeTakenSeconds: Number(timeTakenSeconds) || 0,
+    hintUsed: Boolean(hintRequested),
+    misconceptionTag: misconceptionTag || "unknown",
+
+    bktMasteryProbability: modelResult?.bkt_mastery_probability || 0,
+    behaviorMasteryProbability:
+      modelResult?.behavior_mastery_probability || 0,
+    finalMasteryProbability: modelResult?.final_mastery_probability || 0,
+    masteryLevel: modelResult?.mastery_level || "unknown",
+
+    recommendedSupportAction: modelResult?.recommended_support_action || "",
+    recommendedNextDifficulty:
+      modelResult?.recommended_next_difficulty || "unknown",
+
+    qState: modelResult?.q_state || [],
+    qAction: modelResult?.q_action || "",
+    reward: modelResult?.reward || 0,
+
+    pythonRawResponse: modelResult || {},
+  });
+
+  return decisionLog;
 };
 
 const getLearningModules = async (req, res) => {
@@ -162,7 +340,6 @@ const startModule = async (req, res) => {
         completedCount: 0,
         correctCount: 0,
         wrongCount: 0,
-        skippedCount: 0,
         hintUsedCount: 0,
         score: 0,
         percentage: 0,
@@ -171,7 +348,6 @@ const startModule = async (req, res) => {
         status: "in_progress",
         completedQuestionIds: [],
         wrongQuestionIds: [],
-        skippedQuestionIds: [],
         startedAt: new Date(),
         lastActivityAt: new Date(),
       });
@@ -322,10 +498,9 @@ const submitTaskAnswer = async (req, res) => {
       selectedAnswer,
       timeTakenSeconds = 0,
       hintRequested = false,
-      skipped = false,
     } = req.body;
 
-    if (!moduleId || !questionId || (!selectedAnswer && !skipped)) {
+    if (!moduleId || !questionId || !selectedAnswer) {
       return res.status(400).json({
         success: false,
         message: "moduleId, questionId and selectedAnswer are required",
@@ -381,7 +556,7 @@ const submitTaskAnswer = async (req, res) => {
     });
 
     const attemptNo = previousAttemptCount + 1;
-    const isCorrect = !skipped && question.correctAnswer === selectedAnswer;
+    const isCorrect = question.correctAnswer === selectedAnswer;
 
     const selectedOption = question.options.find(
       (option) => option.label === selectedAnswer
@@ -395,14 +570,13 @@ const submitTaskAnswer = async (req, res) => {
       timeTakenSeconds,
       difficulty: question.difficulty,
       hintRequested,
-      skipped,
     });
 
     await QuestionAttempt.create({
       student: studentId,
       module: moduleId,
       question: questionId,
-      selectedAnswer: skipped ? "SKIPPED" : selectedAnswer,
+      selectedAnswer,
       isCorrect,
       attemptNo,
       timeTakenSeconds: Number(timeTakenSeconds) || 0,
@@ -411,34 +585,95 @@ const submitTaskAnswer = async (req, res) => {
       misconceptionTag,
     });
 
-    question.attemptCount += 1;
+    question.attemptCount = (question.attemptCount || 0) + 1;
 
-if (isCorrect) {
-  question.correctCount += 1;
-}
-
-await question.save();
-
-// Recalculate dynamic question difficulty after each attempt
-await calculateQuestionDifficulty(question._id);
-
-    progress.lastActivityAt = new Date();
-    progress.totalTimeSpentSeconds += Number(timeTakenSeconds) || 0;
-
-    if (Boolean(hintRequested)) {
-      progress.hintUsedCount += 1;
+    if (isCorrect) {
+      question.correctCount = (question.correctCount || 0) + 1;
     }
 
-    if (Boolean(skipped)) {
-      progress.skippedCount += 1;
+    await question.save();
 
-      const alreadySkipped = progress.skippedQuestionIds.some(
-        (id) => id.toString() === questionId.toString()
-      );
+    await calculateQuestionDifficulty(question._id);
 
-      if (!alreadySkipped) {
-        progress.skippedQuestionIds.push(questionId);
-      }
+    const updatedQuestion = await Question.findById(question._id);
+
+    const mastery = await getOrCreateConceptMastery(
+      studentId,
+      question.concept
+    );
+
+    const pythonPayload = buildPythonPayload({
+      studentId,
+      moduleId,
+      question,
+      selectedAnswer,
+      attemptNo,
+      timeTakenSeconds,
+      hintRequested,
+      misconceptionTag,
+      mastery,
+      updatedQuestion,
+    });
+
+    let modelResult = null;
+
+    try {
+      modelResult = await analyzeStudentInteraction(pythonPayload);
+    } catch (modelError) {
+      console.error("PYTHON MODEL ERROR:", modelError.message);
+
+      modelResult = {
+        student_id: String(studentId),
+        question_id: String(question._id),
+        module_id: String(moduleId),
+        concept: question.concept,
+        is_correct: isCorrect,
+        bkt_mastery_probability: mastery.masteryProbability || 0.3,
+        behavior_mastery_probability: mastery.masteryProbability || 0.3,
+        final_mastery_probability: mastery.masteryProbability || 0.3,
+        mastery_level: mastery.masteryLevel || "low",
+        is_stuck: stuckAnalysis.isStuck,
+        stuck_reason: stuckAnalysis.stuckReason,
+        recommended_support_action: stuckAnalysis.isStuck
+          ? "simple_hint"
+          : "retry_same_question",
+        recommended_next_difficulty:
+          updatedQuestion.effectiveDifficulty || question.difficulty,
+        state: {},
+        q_state: [],
+        q_action: stuckAnalysis.isStuck ? "simple_hint" : "retry_same_question",
+        reward: 0,
+      };
+    }
+
+    await updateConceptMasteryFromModel({
+      mastery,
+      isCorrect,
+      hintRequested,
+      timeTakenSeconds,
+      modelResult,
+    });
+
+    const decisionLog = await saveDecisionLog({
+      studentId,
+      moduleId,
+      question,
+      selectedAnswer,
+      isCorrect,
+      attemptNo,
+      timeTakenSeconds,
+      hintRequested,
+      misconceptionTag,
+      modelResult,
+      stuckAnalysis,
+    });
+
+    progress.lastActivityAt = new Date();
+    progress.totalTimeSpentSeconds =
+      (progress.totalTimeSpentSeconds || 0) + (Number(timeTakenSeconds) || 0);
+
+    if (Boolean(hintRequested)) {
+      progress.hintUsedCount = (progress.hintUsedCount || 0) + 1;
     }
 
     if (isCorrect) {
@@ -448,19 +683,22 @@ await calculateQuestionDifficulty(question._id);
 
       if (!alreadyCompleted) {
         progress.completedQuestionIds.push(questionId);
-        progress.completedCount += 1;
-        progress.correctCount += 1;
-        progress.score += 1;
-        progress.currentOrderNo += 1;
+        progress.completedCount = (progress.completedCount || 0) + 1;
+        progress.correctCount = (progress.correctCount || 0) + 1;
+        progress.score = (progress.score || 0) + 1;
+        progress.currentOrderNo = (progress.currentOrderNo || 1) + 1;
       }
 
       progress.status = "in_progress";
       progress.stuckQuestion = null;
+
       progress.percentage = calculatePercentage(
         progress.score,
         progress.totalQuestions
       );
+
       progress.overallMasteryScore = progress.percentage / 100;
+
       progress.overallMasteryLevel = getMasteryLevel(
         progress.score,
         progress.totalQuestions
@@ -487,6 +725,17 @@ await calculateQuestionDifficulty(question._id);
           message: "Correct answer. Module completed.",
           score: progress.score,
           progress,
+          difficultyAnalysis: {
+            concept: question.concept,
+            bktMasteryProbability: modelResult.bkt_mastery_probability,
+            behaviorMasteryProbability:
+              modelResult.behavior_mastery_probability,
+            finalMasteryProbability: modelResult.final_mastery_probability,
+            masteryLevel: modelResult.mastery_level,
+          },
+          decisionMaking: {
+            decisionLogId: decisionLog._id,
+          },
         });
       }
 
@@ -503,6 +752,16 @@ await calculateQuestionDifficulty(question._id);
         message: "Correct answer. Next sequential task is unlocked.",
         nextQuestion,
         progress,
+        difficultyAnalysis: {
+          concept: question.concept,
+          bktMasteryProbability: modelResult.bkt_mastery_probability,
+          behaviorMasteryProbability: modelResult.behavior_mastery_probability,
+          finalMasteryProbability: modelResult.final_mastery_probability,
+          masteryLevel: modelResult.mastery_level,
+        },
+        decisionMaking: {
+          decisionLogId: decisionLog._id,
+        },
       });
     }
 
@@ -514,7 +773,7 @@ await calculateQuestionDifficulty(question._id);
       progress.wrongQuestionIds.push(questionId);
     }
 
-    progress.wrongCount += 1;
+    progress.wrongCount = (progress.wrongCount || 0) + 1;
 
     if (!stuckAnalysis.isStuck) {
       progress.status = "in_progress";
@@ -540,6 +799,21 @@ await calculateQuestionDifficulty(question._id);
         attemptNo,
         stuckAnalysis,
         progress,
+        difficultyAnalysis: {
+          concept: question.concept,
+          bktMasteryProbability: modelResult.bkt_mastery_probability,
+          behaviorMasteryProbability: modelResult.behavior_mastery_probability,
+          finalMasteryProbability: modelResult.final_mastery_probability,
+          masteryLevel: modelResult.mastery_level,
+        },
+        decisionMaking: {
+          recommendedSupportAction: modelResult.recommended_support_action,
+          recommendedNextDifficulty: modelResult.recommended_next_difficulty,
+          qState: modelResult.q_state,
+          qAction: modelResult.q_action,
+          reward: modelResult.reward,
+          decisionLogId: decisionLog._id,
+        },
       });
     }
 
@@ -547,9 +821,8 @@ await calculateQuestionDifficulty(question._id);
     progress.stuckQuestion = questionId;
 
     progress.lastRecommendation = {
-      action: "RUN_Q_LEARNING_DECISION",
-      message:
-        "Student is stuck. Send this state to the Q-learning decision module.",
+      action: modelResult.recommended_support_action || "Q_LEARNING_SUPPORT",
+      message: "Q-learning selected the best support action.",
       nextQuestion: null,
     };
 
@@ -560,29 +833,39 @@ await calculateQuestionDifficulty(question._id);
       isCorrect: false,
       isStuck: true,
       completed: false,
-      nextAction: "RUN_Q_LEARNING_DECISION",
-      message:
-        "Student is stuck. Q-learning should select the best support action.",
+      nextAction: "SHOW_Q_LEARNING_SUPPORT",
+      message: "Student is stuck. Q-learning selected a support action.",
       attemptNo,
       stuckAnalysis,
-      stuckPayload: {
-        studentId,
-        moduleId,
-        questionId,
+      difficultyAnalysis: {
+        concept: question.concept,
+        lecturerDifficulty: question.difficulty,
+        dynamicDifficulty: updatedQuestion.dynamicDifficulty || "not_enough_data",
+        effectiveDifficulty:
+          updatedQuestion.effectiveDifficulty || question.difficulty,
+        questionDifficultyScore: updatedQuestion.difficultyScore || 0,
+
+        bktMasteryProbability: modelResult.bkt_mastery_probability,
+        behaviorMasteryProbability: modelResult.behavior_mastery_probability,
+        finalMasteryProbability: modelResult.final_mastery_probability,
+        masteryLevel: modelResult.mastery_level,
+      },
+      decisionMaking: {
+        recommendedSupportAction: modelResult.recommended_support_action,
+        recommendedNextDifficulty: modelResult.recommended_next_difficulty,
+        qState: modelResult.q_state,
+        qAction: modelResult.q_action,
+        reward: modelResult.reward,
+        decisionLogId: decisionLog._id,
+      },
+      support: {
+        action: modelResult.recommended_support_action,
+        hint: question.hint,
+        detailedHint: question.detailedHint,
+        explanation: question.explanation,
         concept: question.concept,
         difficulty: question.difficulty,
-        orderNo: question.orderNo,
-        selectedAnswer: skipped ? "SKIPPED" : selectedAnswer,
-        correctAnswer: question.correctAnswer,
-        timeTakenSeconds: Number(timeTakenSeconds) || 0,
-        hintUsed: Boolean(hintRequested),
-        skipped: Boolean(skipped),
         misconceptionTag,
-        timeStatus: stuckAnalysis.timeStatus,
-        stuckReason: stuckAnalysis.stuckReason,
-        questionHint: question.hint,
-        questionDetailedHint: question.detailedHint,
-        questionExplanation: question.explanation,
       },
       progress,
     });
@@ -630,6 +913,12 @@ const handleSuggestedRoundResult = async (req, res) => {
     }
 
     const passed = Number(correctCount) >= Math.ceil(Number(totalQuestions) / 2);
+
+    if (decisionLogId) {
+      await DecisionLog.findByIdAndUpdate(decisionLogId, {
+        status: passed ? "completed" : "recommended",
+      });
+    }
 
     if (passed) {
       progress.status = "in_progress";

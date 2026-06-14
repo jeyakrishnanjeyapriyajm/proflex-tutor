@@ -49,11 +49,6 @@ const studentConceptMasterySchema = new mongoose.Schema(
       default: 0,
     },
 
-    explanationShownCount: {
-      type: Number,
-      default: 0,
-    },
-
     stuckCount: {
       type: Number,
       default: 0,
@@ -64,14 +59,14 @@ const studentConceptMasterySchema = new mongoose.Schema(
       default: 0,
     },
 
-    lastRecommendedDifficulty: {
+    lastSupportAction: {
       type: String,
-      enum: ["easy", "medium", "hard", ""],
       default: "",
     },
 
-    lastSupportAction: {
+    lastRecommendedDifficulty: {
       type: String,
+      enum: ["easy", "medium", "hard", ""],
       default: "",
     },
 
@@ -80,9 +75,7 @@ const studentConceptMasterySchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 studentConceptMasterySchema.index(

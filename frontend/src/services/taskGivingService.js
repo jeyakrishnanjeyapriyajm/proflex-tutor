@@ -22,22 +22,15 @@ export const submitTaskAnswer = async (payload) => {
   return data;
 };
 
-export const runDifficultyAnalysis = async (payload) => {
-  const { data } = await API.post("/difficulty/analyze", payload);
-  return data;
-};
-
-export const submitDecisionReward = async (payload) => {
-  const { data } = await API.post("/difficulty/reward", payload);
-  return data;
-};
-
-export const getMyConceptMastery = async () => {
-  const { data } = await API.get("/difficulty/my-mastery");
-  return data;
-};
-
 export const submitSuggestedRoundResult = async (payload) => {
-  const { data } = await API.post("/task-giving/suggested-round-result", payload);
+  const { data } = await API.post(
+    "/task-giving/suggested-round-result",
+    payload
+  );
+  return data;
+};
+
+export const submitModelReward = async (payload) => {
+  const { data } = await API.post("/model/support-reward", payload);
   return data;
 };
