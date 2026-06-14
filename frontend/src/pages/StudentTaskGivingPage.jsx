@@ -41,7 +41,11 @@ export default function StudentTaskGivingPage() {
       setMessage("");
       setStuckData(null);
 
-      await axios.post(`${API_BASE}/modules/${module._id}/start`, {}, authHeader);
+      await axios.post(
+        `${API_BASE}/modules/${module._id}/start`,
+        {},
+        authHeader,
+      );
       await loadCurrentTask(module._id);
     } catch (error) {
       setMessage("Could not start module.");
@@ -52,7 +56,10 @@ export default function StudentTaskGivingPage() {
 
   async function loadCurrentTask(moduleId = selectedModule?._id) {
     try {
-      const res = await axios.get(`${API_BASE}/modules/${moduleId}/current-task`, authHeader);
+      const res = await axios.get(
+        `${API_BASE}/modules/${moduleId}/current-task`,
+        authHeader,
+      );
 
       if (res.data.completed) {
         setQuestion(null);
@@ -87,7 +94,7 @@ export default function StudentTaskGivingPage() {
           timeTakenSeconds,
           hintUsed: false,
         },
-        authHeader
+        authHeader,
       );
 
       setMessage(res.data.message);
@@ -133,11 +140,15 @@ export default function StudentTaskGivingPage() {
               key={module._id}
               onClick={() => startModule(module)}
               className={`rounded-xl border bg-white p-4 text-left shadow-sm hover:border-blue-500 ${
-                selectedModule?._id === module._id ? "border-blue-600" : "border-slate-200"
+                selectedModule?._id === module._id
+                  ? "border-blue-600"
+                  : "border-slate-200"
               }`}
             >
               <h2 className="font-semibold text-slate-800">{module.name}</h2>
-              <p className="mt-1 text-sm text-slate-500">{module.description}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {module.description}
+              </p>
             </button>
           ))}
         </div>

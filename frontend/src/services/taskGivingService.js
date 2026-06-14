@@ -1,30 +1,43 @@
-import axiosInstance from "../api/axiosInstance";
+import API from "./api";
 
 export const getTaskModules = async () => {
-  const response = await axiosInstance.get("/task-giving/modules");
-  return response.data;
+  const { data } = await API.get("/task-giving/modules");
+  return data;
 };
 
 export const startTaskModule = async (moduleId) => {
-  const response = await axiosInstance.post(`/task-giving/start/${moduleId}`);
-  return response.data;
+  const { data } = await API.post(`/task-giving/modules/${moduleId}/start`);
+  return data;
 };
 
 export const getCurrentTask = async (moduleId) => {
-  const response = await axiosInstance.get(`/task-giving/current/${moduleId}`);
-  return response.data;
+  const { data } = await API.get(
+    `/task-giving/modules/${moduleId}/current-task`
+  );
+  return data;
 };
 
 export const submitTaskAnswer = async (payload) => {
-  const response = await axiosInstance.post("/task-giving/submit", payload);
-  return response.data;
+  const { data } = await API.post("/task-giving/submit", payload);
+  return data;
 };
 
-const taskGivingService = {
-  getTaskModules,
-  startTaskModule,
-  getCurrentTask,
-  submitTaskAnswer,
+export const runDifficultyAnalysis = async (payload) => {
+  const { data } = await API.post("/difficulty/analyze", payload);
+  return data;
 };
 
-export default taskGivingService;
+export const submitDecisionReward = async (payload) => {
+  const { data } = await API.post("/difficulty/reward", payload);
+  return data;
+};
+
+export const getMyConceptMastery = async () => {
+  const { data } = await API.get("/difficulty/my-mastery");
+  return data;
+};
+
+export const submitSuggestedRoundResult = async (payload) => {
+  const { data } = await API.post("/task-giving/suggested-round-result", payload);
+  return data;
+};

@@ -1,13 +1,104 @@
+const {
+  calculateQuestionDifficulty,
+} = require("../services/questionDifficultyService");
 const LearningModule = require("../models/LearningModule");
 const Question = require("../models/Question");
 const StudentModuleProgress = require("../models/StudentModuleProgress");
 const QuestionAttempt = require("../models/QuestionAttempt");
 
 const publicQuestionFields = "-correctAnswer -explanation";
-const axios = require("axios");
+
+const EXPECTED_TIME_SECONDS = {
+  easy: 45,
+  medium: 90,
+  hard: 150,
+};
 
 const getStudentId = (req) => {
   return req.user?._id || req.user?.id;
+};
+
+const calculatePercentage = (score, totalQuestions) => {
+  if (!totalQuestions || totalQuestions <= 0) return 0;
+  return Math.round((score / totalQuestions) * 100);
+};
+
+const getMasteryLevel = (score, totalQuestions) => {
+  const percentage = calculatePercentage(score, totalQuestions);
+
+  if (percentage < 40) return "low";
+  if (percentage < 70) return "medium";
+  return "high";
+};
+
+const getTimeStatus = (timeTakenSeconds, difficulty) => {
+  const expectedTime = EXPECTED_TIME_SECONDS[difficulty] || 90;
+  return Number(timeTakenSeconds) > expectedTime ? "slow" : "normal";
+};
+
+const detectStuckStatus = ({
+  isCorrect,
+  attemptNo,
+  timeTakenSeconds,
+  difficulty,
+  hintRequested,
+  skipped,
+}) => {
+  const timeStatus = getTimeStatus(timeTakenSeconds, difficulty);
+
+  if (isCorrect) {
+    return {
+      isStuck: false,
+      stuckReason: "",
+      timeStatus,
+    };
+  }
+
+  if (Number(attemptNo) >= 2) {
+    return {
+      isStuck: true,
+      stuckReason: "multiple_wrong_attempts",
+      timeStatus,
+    };
+  }
+
+  if (timeStatus === "slow") {
+    return {
+      isStuck: true,
+      stuckReason: "slow_response_time",
+      timeStatus,
+    };
+  }
+
+  if (Boolean(hintRequested)) {
+    return {
+      isStuck: true,
+      stuckReason: "hint_requested",
+      timeStatus,
+    };
+  }
+
+  if (Boolean(skipped)) {
+    return {
+      isStuck: true,
+      stuckReason: "question_skipped",
+      timeStatus,
+    };
+  }
+
+  return {
+    isStuck: false,
+    stuckReason: "",
+    timeStatus,
+  };
+};
+
+const findCurrentQuestion = async (moduleId, orderNo) => {
+  return Question.findOne({
+    module: moduleId,
+    orderNo,
+    isActive: true,
+  }).select(publicQuestionFields);
 };
 
 const getLearningModules = async (req, res) => {
@@ -38,10 +129,22 @@ const startModule = async (req, res) => {
 
     const module = await LearningModule.findById(moduleId);
 
-    if (!module) {
+    if (!module || !module.isActive) {
       return res.status(404).json({
         success: false,
         message: "Module not found",
+      });
+    }
+
+    const totalQuestions = await Question.countDocuments({
+      module: moduleId,
+      isActive: true,
+    });
+
+    if (totalQuestions === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This module has no active questions",
       });
     }
 
@@ -55,20 +158,69 @@ const startModule = async (req, res) => {
         student: studentId,
         module: moduleId,
         currentOrderNo: 1,
+        totalQuestions,
+        completedCount: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        skippedCount: 0,
+        hintUsedCount: 0,
         score: 0,
+        percentage: 0,
+        overallMasteryScore: 0,
+        overallMasteryLevel: "low",
         status: "in_progress",
+        completedQuestionIds: [],
+        wrongQuestionIds: [],
+        skippedQuestionIds: [],
         startedAt: new Date(),
+        lastActivityAt: new Date(),
       });
-    } else if (progress.status === "not_started") {
-      progress.status = "in_progress";
-      progress.startedAt = new Date();
+    } else {
+      if (progress.status === "not_started") {
+        progress.status = "in_progress";
+        progress.startedAt = new Date();
+      }
+
+      progress.totalQuestions = totalQuestions;
+      progress.lastActivityAt = new Date();
+
       await progress.save();
     }
+
+    const question = await findCurrentQuestion(moduleId, progress.currentOrderNo);
+
+    if (!question) {
+      progress.status = "completed";
+      progress.completedAt = new Date();
+      progress.percentage = calculatePercentage(progress.score, totalQuestions);
+      progress.overallMasteryScore = progress.percentage / 100;
+      progress.overallMasteryLevel = getMasteryLevel(
+        progress.score,
+        totalQuestions
+      );
+      progress.currentQuestion = null;
+
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        completed: true,
+        message: "Module completed",
+        module,
+        progress,
+      });
+    }
+
+    progress.currentQuestion = question._id;
+    await progress.save();
 
     return res.status(200).json({
       success: true,
       message: "Module started",
+      module,
       progress,
+      question,
+      completed: false,
     });
   } catch (error) {
     console.error("START MODULE ERROR:", error);
@@ -104,18 +256,26 @@ const getCurrentTask = async (req, res) => {
         completed: true,
         message: "Module completed",
         score: progress.score,
+        progress,
       });
     }
 
-    const question = await Question.findOne({
-      module: moduleId,
-      orderNo: progress.currentOrderNo,
-      isActive: true,
-    }).select(publicQuestionFields);
+    const question = await findCurrentQuestion(moduleId, progress.currentOrderNo);
 
     if (!question) {
       progress.status = "completed";
       progress.completedAt = new Date();
+      progress.percentage = calculatePercentage(
+        progress.score,
+        progress.totalQuestions
+      );
+      progress.overallMasteryScore = progress.percentage / 100;
+      progress.overallMasteryLevel = getMasteryLevel(
+        progress.score,
+        progress.totalQuestions
+      );
+      progress.currentQuestion = null;
+
       await progress.save();
 
       return res.status(200).json({
@@ -123,8 +283,14 @@ const getCurrentTask = async (req, res) => {
         completed: true,
         message: "Module completed",
         score: progress.score,
+        progress,
       });
     }
+
+    progress.currentQuestion = question._id;
+    progress.lastActivityAt = new Date();
+
+    await progress.save();
 
     return res.status(200).json({
       success: true,
@@ -132,6 +298,7 @@ const getCurrentTask = async (req, res) => {
       currentOrderNo: progress.currentOrderNo,
       score: progress.score,
       status: progress.status,
+      progress,
       question,
     });
   } catch (error) {
@@ -154,9 +321,11 @@ const submitTaskAnswer = async (req, res) => {
       questionId,
       selectedAnswer,
       timeTakenSeconds = 0,
+      hintRequested = false,
+      skipped = false,
     } = req.body;
 
-    if (!moduleId || !questionId || !selectedAnswer) {
+    if (!moduleId || !questionId || (!selectedAnswer && !skipped)) {
       return res.status(400).json({
         success: false,
         message: "moduleId, questionId and selectedAnswer are required",
@@ -165,7 +334,7 @@ const submitTaskAnswer = async (req, res) => {
 
     const question = await Question.findById(questionId);
 
-    if (!question) {
+    if (!question || !question.isActive) {
       return res.status(404).json({
         success: false,
         message: "Question not found",
@@ -180,7 +349,7 @@ const submitTaskAnswer = async (req, res) => {
     if (!progress) {
       return res.status(404).json({
         success: false,
-        message: "Progress not found",
+        message: "Progress not found. Start this module first.",
       });
     }
 
@@ -191,6 +360,20 @@ const submitTaskAnswer = async (req, res) => {
       });
     }
 
+    if (question.module.toString() !== moduleId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Question does not belong to this module",
+      });
+    }
+
+    if (Number(question.orderNo) !== Number(progress.currentOrderNo)) {
+      return res.status(400).json({
+        success: false,
+        message: "This is not the current active question",
+      });
+    }
+
     const previousAttemptCount = await QuestionAttempt.countDocuments({
       student: studentId,
       module: moduleId,
@@ -198,70 +381,116 @@ const submitTaskAnswer = async (req, res) => {
     });
 
     const attemptNo = previousAttemptCount + 1;
-    const isCorrect = question.correctAnswer === selectedAnswer;
+    const isCorrect = !skipped && question.correctAnswer === selectedAnswer;
 
     const selectedOption = question.options.find(
-      (option) => option.label === selectedAnswer,
+      (option) => option.label === selectedAnswer
     );
 
-    const misconceptionTag = selectedOption?.misconceptionTag || "";
+    const misconceptionTag = selectedOption?.misconceptionTag || "unknown";
+
+    const stuckAnalysis = detectStuckStatus({
+      isCorrect,
+      attemptNo,
+      timeTakenSeconds,
+      difficulty: question.difficulty,
+      hintRequested,
+      skipped,
+    });
 
     await QuestionAttempt.create({
       student: studentId,
       module: moduleId,
       question: questionId,
-      selectedAnswer,
+      selectedAnswer: skipped ? "SKIPPED" : selectedAnswer,
       isCorrect,
       attemptNo,
-      timeTakenSeconds,
-      hintUsed: attemptNo >= 2,
-      isStuck: !isCorrect && attemptNo >= 3,
+      timeTakenSeconds: Number(timeTakenSeconds) || 0,
+      hintUsed: Boolean(hintRequested),
+      isStuck: stuckAnalysis.isStuck,
       misconceptionTag,
     });
 
     question.attemptCount += 1;
 
-    if (isCorrect) {
-      question.correctCount += 1;
+if (isCorrect) {
+  question.correctCount += 1;
+}
+
+await question.save();
+
+// Recalculate dynamic question difficulty after each attempt
+await calculateQuestionDifficulty(question._id);
+
+    progress.lastActivityAt = new Date();
+    progress.totalTimeSpentSeconds += Number(timeTakenSeconds) || 0;
+
+    if (Boolean(hintRequested)) {
+      progress.hintUsedCount += 1;
     }
 
-    await question.save();
+    if (Boolean(skipped)) {
+      progress.skippedCount += 1;
 
-    // CASE 1: CORRECT ANSWER
+      const alreadySkipped = progress.skippedQuestionIds.some(
+        (id) => id.toString() === questionId.toString()
+      );
+
+      if (!alreadySkipped) {
+        progress.skippedQuestionIds.push(questionId);
+      }
+    }
+
     if (isCorrect) {
       const alreadyCompleted = progress.completedQuestionIds.some(
-        (id) => id.toString() === questionId,
+        (id) => id.toString() === questionId.toString()
       );
 
       if (!alreadyCompleted) {
         progress.completedQuestionIds.push(questionId);
+        progress.completedCount += 1;
+        progress.correctCount += 1;
         progress.score += 1;
         progress.currentOrderNo += 1;
       }
 
       progress.status = "in_progress";
       progress.stuckQuestion = null;
+      progress.percentage = calculatePercentage(
+        progress.score,
+        progress.totalQuestions
+      );
+      progress.overallMasteryScore = progress.percentage / 100;
+      progress.overallMasteryLevel = getMasteryLevel(
+        progress.score,
+        progress.totalQuestions
+      );
 
-      const nextQuestion = await Question.findOne({
-        module: moduleId,
-        orderNo: progress.currentOrderNo,
-        isActive: true,
-      }).select(publicQuestionFields);
+      const nextQuestion = await findCurrentQuestion(
+        moduleId,
+        progress.currentOrderNo
+      );
 
       if (!nextQuestion) {
         progress.status = "completed";
         progress.completedAt = new Date();
+        progress.currentQuestion = null;
+
         await progress.save();
 
         return res.status(200).json({
           success: true,
           isCorrect: true,
           completed: true,
+          isStuck: false,
           nextAction: "MODULE_COMPLETED",
           message: "Correct answer. Module completed.",
           score: progress.score,
+          progress,
         });
       }
+
+      progress.currentQuestion = nextQuestion._id;
 
       await progress.save();
 
@@ -269,60 +498,73 @@ const submitTaskAnswer = async (req, res) => {
         success: true,
         isCorrect: true,
         isStuck: false,
+        completed: false,
         nextAction: "NEXT_SEQUENTIAL_TASK",
-        message: "Correct answer. Next task is unlocked.",
+        message: "Correct answer. Next sequential task is unlocked.",
         nextQuestion,
         progress,
       });
     }
 
-    // CASE 2: FIRST WRONG ATTEMPT → SHOW HINT
-    if (attemptNo === 1) {
+    const alreadyWrong = progress.wrongQuestionIds.some(
+      (id) => id.toString() === questionId.toString()
+    );
+
+    if (!alreadyWrong) {
+      progress.wrongQuestionIds.push(questionId);
+    }
+
+    progress.wrongCount += 1;
+
+    if (!stuckAnalysis.isStuck) {
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+
+      progress.lastRecommendation = {
+        action: "RETRY_CURRENT_TASK",
+        message:
+          "Wrong answer, but student is not stuck yet. Allow retry on the same question.",
+        nextQuestion: questionId,
+      };
+
+      await progress.save();
+
       return res.status(200).json({
         success: true,
         isCorrect: false,
         isStuck: false,
-        nextAction: "SHOW_HINT",
-        message: "Wrong answer. Read the hint and try again.",
+        completed: false,
+        nextAction: "RETRY_CURRENT_TASK",
+        message:
+          "Wrong answer. Try the same question again. Support decision is not required yet.",
         attemptNo,
-        support: {
-          type: "hint",
-          text: question.hint || "Review the key concept and try again.",
-        },
+        stuckAnalysis,
+        progress,
       });
     }
 
-    // CASE 3: SECOND WRONG ATTEMPT → SHOW EXPLANATION
-    if (attemptNo === 2) {
-      return res.status(200).json({
-        success: true,
-        isCorrect: false,
-        isStuck: false,
-        nextAction: "SHOW_EXPLANATION",
-        message: "Still incorrect. Read the explanation and try again.",
-        attemptNo,
-        support: {
-          type: "explanation",
-          text:
-            question.explanation ||
-            "Read the concept explanation carefully and try again.",
-        },
-      });
-    }
-
-    // CASE 4: THIRD WRONG ATTEMPT → SEND TO DIFFICULTY ANALYSIS
     progress.status = "stuck";
     progress.stuckQuestion = questionId;
+
+    progress.lastRecommendation = {
+      action: "RUN_Q_LEARNING_DECISION",
+      message:
+        "Student is stuck. Send this state to the Q-learning decision module.",
+      nextQuestion: null,
+    };
+
     await progress.save();
 
     return res.status(200).json({
       success: true,
       isCorrect: false,
       isStuck: true,
-      nextAction: "SEND_TO_DIFFICULTY_ANALYSIS",
+      completed: false,
+      nextAction: "RUN_Q_LEARNING_DECISION",
       message:
-        "Student is stuck after three attempts. Send this data to Difficulty Analysis and Decision Making.",
+        "Student is stuck. Q-learning should select the best support action.",
       attemptNo,
+      stuckAnalysis,
       stuckPayload: {
         studentId,
         moduleId,
@@ -330,14 +572,19 @@ const submitTaskAnswer = async (req, res) => {
         concept: question.concept,
         difficulty: question.difficulty,
         orderNo: question.orderNo,
-        selectedAnswer,
+        selectedAnswer: skipped ? "SKIPPED" : selectedAnswer,
         correctAnswer: question.correctAnswer,
-        timeTakenSeconds,
-        hintUsed: true,
+        timeTakenSeconds: Number(timeTakenSeconds) || 0,
+        hintUsed: Boolean(hintRequested),
+        skipped: Boolean(skipped),
         misconceptionTag,
+        timeStatus: stuckAnalysis.timeStatus,
+        stuckReason: stuckAnalysis.stuckReason,
         questionHint: question.hint,
+        questionDetailedHint: question.detailedHint,
         questionExplanation: question.explanation,
       },
+      progress,
     });
   } catch (error) {
     console.error("SUBMIT TASK ANSWER ERROR:", error);
@@ -350,84 +597,25 @@ const submitTaskAnswer = async (req, res) => {
   }
 };
 
-// ─── Difficulty Analysis ─────────────────────────────────────────────────────
-// Update runDifficultyAnalysis to fetch 5 questions instead of 3
-const runDifficultyAnalysis = async (req, res) => {
-  try {
-    const {
-      questionId,
-      concept,
-      difficulty,
-      selectedAnswer,
-      correctAnswer,
-      attemptNo,
-      timeTakenSeconds,
-      hintUsed,
-      misconceptionTag,
-    } = req.body;
-
-    const studentId = getStudentId(req);
-    const pythonUrl = process.env.PYTHON_MODEL_URL;
-
-    const modelRes = await axios.post(`${pythonUrl}/analyze`, {
-      student_id: studentId.toString(),
-      question_id: questionId,
-      concept,
-      difficulty,
-      selected_answer: selectedAnswer,
-      correct_answer: correctAnswer,
-      attempt_no: Number(attemptNo) || 3,
-      time_taken_seconds: Number(timeTakenSeconds) || 0,
-      hint_used: Boolean(hintUsed),
-      misconception_tag: misconceptionTag || "unknown",
-    });
-
-    const {
-      recommended_next_difficulty,
-      recommended_support_action,
-      mastery_level,
-      bkt_mastery_probability,
-    } = modelRes.data;
-
-    let suggestedQuestions = [];
-
-    // Only show 5 suggestions if recommended difficulty is easy
-    if (recommended_next_difficulty === "easy") {
-      suggestedQuestions = await Question.find({
-        concept: concept,
-        difficulty: "easy",
-        _id: { $ne: questionId },
-        isActive: true,
-      })
-        .limit(5)
-        .select(
-          "_id questionText options codeSnippet difficulty concept correctAnswer hint",
-        );
-    }
-
-    return res.status(200).json({
-      success: true,
-      recommended_next_difficulty,
-      recommended_support_action,
-      mastery_level,
-      bkt_mastery_probability,
-      suggestedQuestions,
-    });
-  } catch (error) {
-    console.error("DIFFICULTY ANALYSIS ERROR:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Difficulty analysis failed. Is Python model running?",
-    });
-  }
-};
-
-// NEW endpoint — handle the result after all 5 suggestions are done
 const handleSuggestedRoundResult = async (req, res) => {
   try {
     const studentId = getStudentId(req);
-    const { moduleId, correctCount, totalQuestions, stuckQuestionId } =
-      req.body;
+
+    const {
+      moduleId,
+      correctCount,
+      totalQuestions,
+      stuckQuestionId,
+      decisionLogId,
+      supportAction,
+    } = req.body;
+
+    if (!moduleId || correctCount === undefined || !totalQuestions) {
+      return res.status(400).json({
+        success: false,
+        message: "moduleId, correctCount and totalQuestions are required",
+      });
+    }
 
     const progress = await StudentModuleProgress.findOne({
       student: studentId,
@@ -441,42 +629,69 @@ const handleSuggestedRoundResult = async (req, res) => {
       });
     }
 
-    const passed = correctCount >= 3; // 3 out of 5 required
+    const passed = Number(correctCount) >= Math.ceil(Number(totalQuestions) / 2);
 
     if (passed) {
-      // ── PASS: let them continue the stuck question ──────────────────────
       progress.status = "in_progress";
       progress.stuckQuestion = null;
+      progress.lastActivityAt = new Date();
+
+      progress.lastRecommendation = {
+        action: "CONTINUE_MAIN_SEQUENCE",
+        message: `Student passed recovery round with ${correctCount}/${totalQuestions}. Continue main sequence.`,
+        nextQuestion: stuckQuestionId || progress.currentQuestion || null,
+      };
+
       await progress.save();
+
+      let originalQuestion = null;
+
+      if (stuckQuestionId) {
+        originalQuestion = await Question.findById(stuckQuestionId).select(
+          publicQuestionFields
+        );
+      }
 
       return res.status(200).json({
         success: true,
         passed: true,
-        message: `Great! You got ${correctCount}/${totalQuestions}. You can continue.`,
-        nextAction: "CONTINUE_STUCK_QUESTION",
-      });
-    } else {
-      // ── FAIL: reset module, show low mastery, restart from Q1 ───────────
-      progress.status = "in_progress";
-      progress.currentOrderNo = 1;
-      progress.score = 0;
-      progress.completedQuestionIds = [];
-      progress.stuckQuestion = null;
-      await progress.save();
-
-      return res.status(200).json({
-        success: true,
-        passed: false,
-        message: `You got ${correctCount}/${totalQuestions}. Your mastery on this concept is Low.`,
-        masteryLevel: "low",
-        nextAction: "RESTART_MODULE",
+        message: `Recovery successful. You got ${correctCount}/${totalQuestions}. Continue the learning path.`,
+        nextAction: "CONTINUE_MAIN_SEQUENCE",
+        supportAction: supportAction || "",
+        question: originalQuestion,
+        decisionLogId: decisionLogId || null,
+        progress,
       });
     }
+
+    progress.status = "stuck";
+    progress.stuckQuestion = stuckQuestionId || progress.stuckQuestion;
+    progress.lastActivityAt = new Date();
+
+    progress.lastRecommendation = {
+      action: "NEEDS_MORE_SUPPORT",
+      message: `Student failed recovery round with ${correctCount}/${totalQuestions}. Q-learning should select another support action.`,
+      nextQuestion: null,
+    };
+
+    await progress.save();
+
+    return res.status(200).json({
+      success: true,
+      passed: false,
+      message: `Recovery not completed. You got ${correctCount}/${totalQuestions}. More support is needed.`,
+      masteryLevel: "low",
+      nextAction: "NEEDS_MORE_SUPPORT",
+      supportAction: supportAction || "",
+      decisionLogId: decisionLogId || null,
+      progress,
+    });
   } catch (error) {
     console.error("SUGGESTED ROUND RESULT ERROR:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to process round result",
+      message: "Failed to process suggested round result",
       error: error.message,
     });
   }
@@ -487,6 +702,5 @@ module.exports = {
   startModule,
   getCurrentTask,
   submitTaskAnswer,
-  runDifficultyAnalysis,
   handleSuggestedRoundResult,
 };

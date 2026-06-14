@@ -8,6 +8,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const difficultyRoutes = require("./routes/difficultyRoutes");
 
 app.use(
   cors({
@@ -27,6 +28,7 @@ app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/user", require("./modules/user_routes"));
 app.use("/api/task-giving", require("./routes/taskGivingRoutes"));
+app.use("/api/difficulty", difficultyRoutes);
 // app.use("/api/admin/curriculum", require("./routes/adminCurriculumRoutes"));
 const PORT = process.env.PORT || 5000;
 
