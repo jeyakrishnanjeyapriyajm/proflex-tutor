@@ -50,6 +50,9 @@ const MAIN_SEQUENCE_LIMITS = {
   hard: 4,
 };
 
+// Student reviews the concept for 5 minutes after all recovery questions fail.
+const REVIEW_MINUTES = 5;
+
 const getStudentId = (req) => {
   return req.user?._id || req.user?.id;
 };
@@ -78,8 +81,19 @@ const normalizeDifficulty = (difficulty) => {
 };
 
 const getTimeStatus = (timeTakenSeconds, difficulty) => {
-  const expectedTime = EXPECTED_TIME_SECONDS[normalizeDifficulty(difficulty)] || 90;
+  const expectedTime =
+    EXPECTED_TIME_SECONDS[normalizeDifficulty(difficulty)] || 90;
+
   return Number(timeTakenSeconds) > expectedTime ? "slow" : "normal";
+};
+
+const getReviewRemainingSeconds = (progress) => {
+  if (!progress.reviewUnlockAt) return 0;
+
+  const unlockTime = new Date(progress.reviewUnlockAt).getTime();
+  const now = Date.now();
+
+  return Math.max(0, Math.ceil((unlockTime - now) / 1000));
 };
 
 const detectStuckStatus = ({
@@ -128,40 +142,6 @@ const detectStuckStatus = ({
     stuckReason: "",
     timeStatus,
   };
-};
-
-const getRecoveryDifficulty = ({
-  supportAction,
-  currentDifficulty,
-  recommendedDifficulty,
-}) => {
-  const normalizedRecommended = normalizeDifficulty(recommendedDifficulty);
-  const normalizedCurrent = normalizeDifficulty(currentDifficulty);
-
-  if (["easy", "medium", "hard"].includes(recommendedDifficulty)) {
-    return normalizedRecommended;
-  }
-
-  if (supportAction === "easier_task") {
-    if (normalizedCurrent === "hard") return "medium";
-    return "easy";
-  }
-
-  if (supportAction === "similar_task") {
-    return normalizedCurrent;
-  }
-
-  if (supportAction === "harder_challenge") {
-    if (normalizedCurrent === "easy") return "medium";
-    return "hard";
-  }
-
-  if (supportAction === "explanation") {
-    if (normalizedCurrent === "hard") return "medium";
-    return normalizedCurrent;
-  }
-
-  return normalizedCurrent;
 };
 
 const blockQuestionForStudent = async ({
@@ -227,7 +207,7 @@ const buildPedagogicalQuestionSequence = async (moduleId) => {
     ...grouped.hard.slice(0, MAIN_SEQUENCE_LIMITS.hard),
   ];
 
-  // If a module does not have enough questions in one difficulty,
+  // If module does not have enough questions in one difficulty,
   // fill remaining slots by pedagogical order.
   if (selected.length < 10) {
     const alreadySelected = new Set(
@@ -237,8 +217,11 @@ const buildPedagogicalQuestionSequence = async (moduleId) => {
     const remaining = questions
       .filter((question) => !alreadySelected.has(String(question._id)))
       .sort((a, b) => {
-        const difficultyA = DIFFICULTY_RANK[normalizeDifficulty(a.difficulty)] || 2;
-        const difficultyB = DIFFICULTY_RANK[normalizeDifficulty(b.difficulty)] || 2;
+        const difficultyA =
+          DIFFICULTY_RANK[normalizeDifficulty(a.difficulty)] || 2;
+
+        const difficultyB =
+          DIFFICULTY_RANK[normalizeDifficulty(b.difficulty)] || 2;
 
         if (difficultyA !== difficultyB) {
           return difficultyA - difficultyB;
@@ -258,9 +241,12 @@ const ensureMainQuestionSequence = async (progress, moduleId) => {
     !progress.mainQuestionSequence ||
     progress.mainQuestionSequence.length === 0
   ) {
-    progress.mainQuestionSequence = await buildPedagogicalQuestionSequence(moduleId);
+    progress.mainQuestionSequence =
+      await buildPedagogicalQuestionSequence(moduleId);
+
     progress.currentSequenceIndex = 0;
     progress.totalQuestions = progress.mainQuestionSequence.length;
+
     await progress.save();
   }
 
@@ -289,41 +275,106 @@ const findCurrentQuestionFromSequence = async (progress) => {
 // Recovery Helpers
 // =====================================================
 
-const getAvailableRecoveryCounts = async ({ moduleId, concept, progress }) => {
-  const excludeIds = [
+const getRecoveryQuestionFingerprint = (question) => {
+  const text = String(question?.questionText || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  const code = String(question?.codeSnippet || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  return `${text}__${code}`;
+};
+
+const getUsedRecoveryFingerprints = async (progress) => {
+  const usedIds = (progress.usedRecoveryQuestionIds || []).filter(Boolean);
+
+  if (usedIds.length === 0) {
+    return new Set();
+  }
+
+  const usedQuestions = await Question.find({
+    _id: { $in: usedIds },
+  })
+    .select("questionText codeSnippet")
+    .lean();
+
+  return new Set(usedQuestions.map(getRecoveryQuestionFingerprint));
+};
+
+const getRecoveryExcludeIds = (progress) => {
+  return [
     ...(progress.mainQuestionSequence || []),
     ...(progress.blockedQuestionIds || []),
     ...(progress.completedQuestionIds || []),
     ...(progress.skippedQuestionIds || []),
+    ...(progress.usedRecoveryQuestionIds || []),
   ].filter(Boolean);
+};
 
-  const baseFilter = {
+const getAvailableRecoveryCountForDifficulty = async ({
+  moduleId,
+  concept,
+  difficulty,
+  progress,
+}) => {
+  const excludeIds = getRecoveryExcludeIds(progress);
+  const usedFingerprints = await getUsedRecoveryFingerprints(progress);
+  const seenFingerprints = new Set();
+
+  const candidates = await Question.find({
     module: moduleId,
     concept,
+    difficulty: normalizeDifficulty(difficulty),
     _id: { $nin: excludeIds },
     isActive: true,
-  };
+  })
+    .sort({ orderNo: 1 })
+    .select("_id questionText codeSnippet")
+    .lean();
 
+  let count = 0;
+
+  candidates.forEach((question) => {
+    const fingerprint = getRecoveryQuestionFingerprint(question);
+
+    if (usedFingerprints.has(fingerprint) || seenFingerprints.has(fingerprint)) {
+      return;
+    }
+
+    seenFingerprints.add(fingerprint);
+    count += 1;
+  });
+
+  return count;
+};
+
+const getAvailableRecoveryCounts = async ({ moduleId, concept, progress }) => {
   const [easy, medium, hard] = await Promise.all([
-    Question.countDocuments({
-      ...baseFilter,
+    getAvailableRecoveryCountForDifficulty({
+      moduleId,
+      concept,
       difficulty: "easy",
+      progress,
     }),
-    Question.countDocuments({
-      ...baseFilter,
+    getAvailableRecoveryCountForDifficulty({
+      moduleId,
+      concept,
       difficulty: "medium",
+      progress,
     }),
-    Question.countDocuments({
-      ...baseFilter,
+    getAvailableRecoveryCountForDifficulty({
+      moduleId,
+      concept,
       difficulty: "hard",
+      progress,
     }),
   ]);
 
-  return {
-    easy,
-    medium,
-    hard,
-  };
+  return { easy, medium, hard };
 };
 
 const getAdaptiveRecoveryQuestions = async ({
@@ -333,14 +384,17 @@ const getAdaptiveRecoveryQuestions = async ({
   count,
   progress,
 }) => {
-  const excludeIds = [
-    ...(progress.mainQuestionSequence || []),
-    ...(progress.blockedQuestionIds || []),
-    ...(progress.completedQuestionIds || []),
-    ...(progress.skippedQuestionIds || []),
-  ].filter(Boolean);
+  const requestedCount = Math.max(0, Number(count) || 0);
 
-  return Question.find({
+  if (requestedCount <= 0) {
+    return [];
+  }
+
+  const excludeIds = getRecoveryExcludeIds(progress);
+  const usedFingerprints = await getUsedRecoveryFingerprints(progress);
+  const selectedFingerprints = new Set();
+
+  const candidates = await Question.find({
     module: moduleId,
     concept,
     difficulty: normalizeDifficulty(difficulty),
@@ -348,27 +402,27 @@ const getAdaptiveRecoveryQuestions = async ({
     isActive: true,
   })
     .sort({ orderNo: 1 })
-    .limit(Number(count) || 0)
-    .select(recoveryQuestionFields);
-};
+    .select(recoveryQuestionFields)
+    .lean();
 
-// =====================================================
-// difficulty 
+  const selected = [];
 
-const getLowerDifficulty = (difficulty) => {
-  const value = normalizeDifficulty(difficulty);
+  for (const question of candidates) {
+    const fingerprint = getRecoveryQuestionFingerprint(question);
 
-  if (value === "hard") return "medium";
-  if (value === "medium") return "easy";
-  return "easy";
-};
+    if (usedFingerprints.has(fingerprint) || selectedFingerprints.has(fingerprint)) {
+      continue;
+    }
 
-const getHigherDifficulty = (difficulty) => {
-  const value = normalizeDifficulty(difficulty);
+    selectedFingerprints.add(fingerprint);
+    selected.push(question);
 
-  if (value === "easy") return "medium";
-  if (value === "medium") return "hard";
-  return "hard";
+    if (selected.length >= requestedCount) {
+      break;
+    }
+  }
+
+  return selected;
 };
 
 const getFirstAvailableDifficulty = (preferredList, availableCounts) => {
@@ -379,84 +433,6 @@ const getFirstAvailableDifficulty = (preferredList, availableCounts) => {
   }
 
   return null;
-};
-
-const resolveRecoveryDifficulty = ({
-  currentDifficulty,
-  masteryLevel,
-  attemptCount,
-  supportAction,
-  availableCounts,
-}) => {
-  const difficulty = normalizeDifficulty(currentDifficulty);
-  const action = String(supportAction || "").toLowerCase();
-
-  /*
-    If Q-learning/action selected easier task,
-    always try lower difficulty first.
-  */
-  if (
-    action.includes("easy") ||
-    action.includes("easier") ||
-    action.includes("lower")
-  ) {
-    return getFirstAvailableDifficulty(
-      [getLowerDifficulty(difficulty), difficulty, getHigherDifficulty(difficulty)],
-      availableCounts
-    );
-  }
-
-  /*
-    If action selected similar practice,
-    use same difficulty only if student is not very weak.
-  */
-  if (
-    action.includes("similar") ||
-    action.includes("medium") ||
-    action.includes("practice")
-  ) {
-    if (masteryLevel === "low" || Number(attemptCount || 0) >= 2) {
-      return getFirstAvailableDifficulty(
-        [getLowerDifficulty(difficulty), difficulty, getHigherDifficulty(difficulty)],
-        availableCounts
-      );
-    }
-
-    return getFirstAvailableDifficulty(
-      [difficulty, getLowerDifficulty(difficulty), getHigherDifficulty(difficulty)],
-      availableCounts
-    );
-  }
-
-  /*
-    If action selected harder challenge.
-  */
-  if (
-    action.includes("hard") ||
-    action.includes("harder") ||
-    action.includes("challenge")
-  ) {
-    return getFirstAvailableDifficulty(
-      [getHigherDifficulty(difficulty), difficulty, getLowerDifficulty(difficulty)],
-      availableCounts
-    );
-  }
-
-  /*
-    Default rule:
-    If student is stuck, give easier question.
-  */
-  if (masteryLevel === "low" || Number(attemptCount || 0) >= 2) {
-    return getFirstAvailableDifficulty(
-      [getLowerDifficulty(difficulty), difficulty, getHigherDifficulty(difficulty)],
-      availableCounts
-    );
-  }
-
-  return getFirstAvailableDifficulty(
-    [difficulty, getLowerDifficulty(difficulty), getHigherDifficulty(difficulty)],
-    availableCounts
-  );
 };
 
 const getOrCreateConceptMastery = async (studentId, concept) => {
@@ -534,7 +510,6 @@ const buildPythonPayload = ({
 
     previous_mastery_probability: mastery.masteryProbability || 0.3,
 
-    // Python Q-agent uses this to decide recovery question count.
     available_recovery_counts: availableRecoveryCounts || {
       easy: 0,
       medium: 0,
@@ -681,7 +656,9 @@ const startModule = async (req, res) => {
       });
     }
 
-    const mainQuestionSequence = await buildPedagogicalQuestionSequence(moduleId);
+    const mainQuestionSequence =
+      await buildPedagogicalQuestionSequence(moduleId);
+
     const totalQuestions = mainQuestionSequence.length;
 
     if (totalQuestions === 0) {
@@ -722,14 +699,23 @@ const startModule = async (req, res) => {
         skippedQuestionIds: [],
         blockedQuestionIds: [],
         blockedQuestionLogs: [],
+        usedRecoveryQuestionIds: [],
+
+        reviewUnlockAt: null,
+        reviewStartedAt: null,
+        reviewReason: "",
+        reviewSupportAction: "",
 
         startedAt: new Date(),
         lastActivityAt: new Date(),
       });
     } else {
-      if (progress.status === "not_started") {
+      if (
+        ["not_started", "needs_review", "stuck", "recovery"].includes(
+          progress.status
+        )
+      ) {
         progress.status = "in_progress";
-        progress.startedAt = new Date();
       }
 
       if (
@@ -739,6 +725,11 @@ const startModule = async (req, res) => {
         progress.mainQuestionSequence = mainQuestionSequence;
         progress.currentSequenceIndex = 0;
       }
+
+      progress.reviewUnlockAt = null;
+      progress.reviewStartedAt = null;
+      progress.reviewReason = "";
+      progress.reviewSupportAction = "";
 
       progress.totalQuestions = progress.mainQuestionSequence.length;
       progress.lastActivityAt = new Date();
@@ -824,7 +815,72 @@ const getCurrentTask = async (req, res) => {
 
     await ensureMainQuestionSequence(progress, moduleId);
 
-    // Do not accidentally show a blocked question again while student is in recovery.
+    if (progress.status === "needs_review") {
+      const remainingSeconds = getReviewRemainingSeconds(progress);
+
+      if (remainingSeconds > 0) {
+        return res.status(200).json({
+          success: true,
+          completed: false,
+          status: "needs_review",
+          nextAction: "WAIT_REVIEW_TIME",
+          message: `Please review this concept. You can retry after ${remainingSeconds} seconds.`,
+          reviewRemainingSeconds: remainingSeconds,
+          reviewUnlockAt: progress.reviewUnlockAt,
+          currentOrderNo: progress.currentOrderNo,
+          currentSequenceIndex: progress.currentSequenceIndex,
+          score: progress.score,
+          progress,
+          question: null,
+        });
+      }
+
+      // After 5-minute concept review, retry the same main question.
+      // Do not skip the main question after explanation.
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+      progress.reviewUnlockAt = null;
+      progress.reviewStartedAt = null;
+      progress.reviewReason = "";
+      progress.reviewSupportAction = "";
+      progress.lastActivityAt = new Date();
+
+      const question = await findCurrentQuestionFromSequence(progress);
+
+      if (!question) {
+        progress.status = "completed";
+        progress.completedAt = new Date();
+        progress.currentQuestion = null;
+
+        await progress.save();
+
+        return res.status(200).json({
+          success: true,
+          completed: true,
+          nextAction: "MODULE_COMPLETED",
+          message: "Module completed.",
+          score: progress.score,
+          progress,
+        });
+      }
+
+      progress.currentQuestion = question._id;
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        completed: false,
+        status: "in_progress",
+        nextAction: "RETRY_MAIN_QUESTION_AFTER_REVIEW",
+        message: "Review completed. Try the same main question again.",
+        currentOrderNo: progress.currentOrderNo,
+        currentSequenceIndex: progress.currentSequenceIndex,
+        score: progress.score,
+        progress,
+        question,
+      });
+    }
+
     if (["stuck", "recovery"].includes(progress.status)) {
       return res.status(200).json({
         success: true,
@@ -942,10 +998,27 @@ const submitTaskAnswer = async (req, res) => {
       });
     }
 
+    if (progress.status === "needs_review") {
+      const remainingSeconds = getReviewRemainingSeconds(progress);
+
+      return res.status(400).json({
+        success: false,
+        message:
+          remainingSeconds > 0
+            ? `Please review this concept first. You can retry after ${remainingSeconds} seconds.`
+            : "Review time finished. Please reload the current task.",
+        nextAction:
+          remainingSeconds > 0 ? "WAIT_REVIEW_TIME" : "RELOAD_CURRENT_TASK",
+        reviewRemainingSeconds: remainingSeconds,
+        reviewUnlockAt: progress.reviewUnlockAt,
+      });
+    }
+
     if (progress.status === "recovery") {
       return res.status(400).json({
         success: false,
-        message: "Complete the recovery tasks before answering the next main question.",
+        message:
+          "Complete the recovery tasks before answering the next main question.",
       });
     }
 
@@ -1200,52 +1273,109 @@ const submitTaskAnswer = async (req, res) => {
 
     progress.wrongCount = (progress.wrongCount || 0) + 1;
 
-    const supportAction =
-      modelResult.recommended_support_action || "retry_same_question";
+    const finalIsStuck = Boolean(modelResult?.is_stuck || stuckAnalysis.isStuck);
 
-    const recommendedDifficulty = resolveRecoveryDifficulty({
-  currentDifficulty: updatedQuestion.effectiveDifficulty || question.difficulty,
-  masteryLevel: modelResult.mastery_level || mastery.masteryLevel || "low",
-  attemptCount: attemptNo,
-  supportAction,
-  availableCounts: availableRecoveryCounts,
-});
+    // Wrong answer but not stuck:
+    // Retry the same main question with no hint, no explanation, no recovery,
+    // and no block.
+    if (!finalIsStuck) {
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+      progress.currentQuestion = questionId;
+      progress.lastRecommendation = {
+        action: "retry_same_question",
+        message:
+          "Wrong answer without stuck behaviour. Retry the same question without support.",
+        nextQuestion: questionId,
+      };
 
-    let recoveryQuestionCount =
-      Number(modelResult.recommended_recovery_count) || 0;
+      await progress.save();
 
-    // Safety fallback:
-    // If Q-agent selects recovery support but Python returns 0 count,
-    // use 1 available recovery question if MongoDB has one.
-    if (RECOVERY_ACTIONS.includes(supportAction) && recoveryQuestionCount <= 0) {
-      recoveryQuestionCount = Math.min(
-        1,
-        availableRecoveryCounts[recommendedDifficulty] || 0
-      );
+      return res.status(200).json({
+        success: true,
+        isCorrect: false,
+        isStuck: false,
+        completed: false,
+        nextAction: "RETRY_CURRENT_TASK",
+        message: "Try the same question again.",
+        attemptNo,
+        stuckAnalysis,
+        recoveryQuestions: [],
+        recoveryQuestionCount: 0,
+        blockedQuestionId: null,
+        difficultyAnalysis: {
+          concept: question.concept,
+          lecturerDifficulty: question.difficulty,
+          dynamicDifficulty:
+            updatedQuestion.dynamicDifficulty || "not_enough_data",
+          effectiveDifficulty:
+            updatedQuestion.effectiveDifficulty || question.difficulty,
+          questionDifficultyScore: updatedQuestion.difficultyScore || 0,
+          bktMasteryProbability: modelResult.bkt_mastery_probability,
+          behaviorMasteryProbability:
+            modelResult.behavior_mastery_probability,
+          finalMasteryProbability: modelResult.final_mastery_probability,
+          masteryLevel: modelResult.mastery_level,
+        },
+        decisionMaking: {
+          recommendedSupportAction: "retry_same_question",
+          recommendedNextDifficulty:
+            updatedQuestion.effectiveDifficulty || question.difficulty,
+          recoveryQuestionCount: 0,
+          shouldBlockCurrentQuestion: false,
+          postRecoveryDecision: "retry_same_question",
+          qState: modelResult.q_state || [],
+          qAction: "retry_same_question",
+          reward: modelResult.reward || 0,
+          decisionLogId: decisionLog._id,
+        },
+        support: {
+          action: "retry_same_question",
+          hint: "",
+          detailedHint: "",
+          explanation: "",
+          concept: question.concept,
+          difficulty: question.difficulty,
+          recommendedDifficulty:
+            updatedQuestion.effectiveDifficulty || question.difficulty,
+          misconceptionTag,
+        },
+        progress,
+      });
     }
 
-    recoveryQuestionCount = Math.max(0, Math.min(recoveryQuestionCount, 5));
+    const supportAction =
+      modelResult.recommended_support_action || "simple_hint";
+
+    let recommendedDifficulty = normalizeDifficulty(
+      modelResult.recommended_next_difficulty ||
+        updatedQuestion.effectiveDifficulty ||
+        question.difficulty
+    );
+
+    if ((availableRecoveryCounts[recommendedDifficulty] || 0) <= 0) {
+      recommendedDifficulty =
+        getFirstAvailableDifficulty(
+          ["easy", "medium", "hard"],
+          availableRecoveryCounts
+        ) || recommendedDifficulty;
+    }
+
+    // Recovery count comes from the Q-agent/Python model.
+    // Backend only caps it by available, non-repeated recovery questions.
+    let recoveryQuestionCount = Math.max(
+      0,
+      Math.min(
+        Number(modelResult.recommended_recovery_count) || 0,
+        availableRecoveryCounts[recommendedDifficulty] || 0
+      )
+    );
 
     let recoveryQuestions = [];
 
-    const shouldBlockCurrentQuestion =
-      Boolean(modelResult.should_block_current_question) ||
-      supportAction === "explanation" ||
-      RECOVERY_ACTIONS.includes(supportAction);
-
-    if (shouldBlockCurrentQuestion) {
-      await blockQuestionForStudent({
-        progress,
-        questionId,
-        reason:
-          supportAction === "explanation"
-            ? "explanation_shown"
-            : modelResult.stuck_reason ||
-              stuckAnalysis.stuckReason ||
-              "q_agent_decision",
-        supportAction,
-      });
-    }
+    // New rule: main question is never blocked.
+    // Only harder_challenge success can skip to the next main question.
+    const shouldBlockCurrentQuestion = false;
 
     if (RECOVERY_ACTIONS.includes(supportAction) && recoveryQuestionCount > 0) {
       recoveryQuestions = await getAdaptiveRecoveryQuestions({
@@ -1254,6 +1384,20 @@ const submitTaskAnswer = async (req, res) => {
         difficulty: recommendedDifficulty,
         count: recoveryQuestionCount,
         progress,
+      });
+    }
+
+    if (recoveryQuestions.length > 0) {
+      progress.usedRecoveryQuestionIds = progress.usedRecoveryQuestionIds || [];
+
+      const usedRecoverySet = new Set(
+        progress.usedRecoveryQuestionIds.map((id) => String(id))
+      );
+
+      recoveryQuestions.forEach((recoveryQuestion) => {
+        if (!usedRecoverySet.has(String(recoveryQuestion._id))) {
+          progress.usedRecoveryQuestionIds.push(recoveryQuestion._id);
+        }
       });
     }
 
@@ -1295,7 +1439,7 @@ const submitTaskAnswer = async (req, res) => {
     return res.status(200).json({
       success: true,
       isCorrect: false,
-      isStuck: Boolean(modelResult.is_stuck),
+      isStuck: finalIsStuck,
       completed: false,
       nextAction,
       message:
@@ -1308,7 +1452,7 @@ const submitTaskAnswer = async (req, res) => {
       stuckAnalysis,
       recoveryQuestions,
       recoveryQuestionCount: recoveryQuestions.length,
-      blockedQuestionId: shouldBlockCurrentQuestion ? questionId : null,
+      blockedQuestionId: null,
       difficultyAnalysis: {
         concept: question.concept,
         lecturerDifficulty: question.difficulty,
@@ -1364,6 +1508,8 @@ const handleSuggestedRoundResult = async (req, res) => {
       moduleId,
       correctCount,
       totalQuestions,
+      attemptedCount,
+      attemptedRecoveryCount,
       stuckQuestionId,
       decisionLogId,
       supportAction,
@@ -1390,7 +1536,14 @@ const handleSuggestedRoundResult = async (req, res) => {
 
     await ensureMainQuestionSequence(progress, moduleId);
 
-    const passed = Number(correctCount) >= Math.ceil(Number(totalQuestions) / 2);
+    const recoveryTotal = Number(totalQuestions) || 0;
+    const recoveryAttempted = Number(
+      attemptedCount ?? attemptedRecoveryCount ?? totalQuestions
+    );
+
+    const passed = Number(correctCount) > 0;
+    const recoveryFinished = recoveryAttempted >= recoveryTotal;
+    const isHarderChallenge = supportAction === "harder_challenge";
 
     if (decisionLogId) {
       await DecisionLog.findByIdAndUpdate(decisionLogId, {
@@ -1399,10 +1552,11 @@ const handleSuggestedRoundResult = async (req, res) => {
     }
 
     if (passed) {
-      // Recovery passed, so skip the blocked/stuck main question
-      // and continue to the next main question in the stored sequence.
-      progress.currentSequenceIndex = (progress.currentSequenceIndex || 0) + 1;
-      progress.currentOrderNo = (progress.currentOrderNo || 1) + 1;
+      if (isHarderChallenge) {
+        progress.currentSequenceIndex =
+          (progress.currentSequenceIndex || 0) + 1;
+        progress.currentOrderNo = (progress.currentOrderNo || 1) + 1;
+      }
 
       progress.status = "in_progress";
       progress.stuckQuestion = null;
@@ -1419,8 +1573,12 @@ const handleSuggestedRoundResult = async (req, res) => {
       }
 
       progress.lastRecommendation = {
-        action: "CONTINUE_MAIN_SEQUENCE",
-        message: `Student passed recovery round with ${correctCount}/${totalQuestions}. Continue main sequence.`,
+        action: isHarderChallenge
+          ? "NEXT_MAIN_AFTER_HARDER_CHALLENGE"
+          : "RETRY_MAIN_QUESTION_AFTER_RECOVERY",
+        message: isHarderChallenge
+          ? "Harder challenge passed. Student can continue to the next main question."
+          : "Recovery successful. Student should retry the same main question.",
         nextQuestion: nextQuestion?._id || null,
       };
 
@@ -1429,8 +1587,14 @@ const handleSuggestedRoundResult = async (req, res) => {
       return res.status(200).json({
         success: true,
         passed: true,
-        message: `Recovery successful. You got ${correctCount}/${totalQuestions}. Continue the learning path.`,
-        nextAction: nextQuestion ? "CONTINUE_MAIN_SEQUENCE" : "MODULE_COMPLETED",
+        message: isHarderChallenge
+          ? "Challenge correct. Continue to the next main question."
+          : "Recovery successful. Now try the same main question again.",
+        nextAction: nextQuestion
+          ? isHarderChallenge
+            ? "NEXT_SEQUENTIAL_TASK_AFTER_CHALLENGE"
+            : "RETRY_MAIN_QUESTION_AFTER_RECOVERY"
+          : "MODULE_COMPLETED",
         supportAction: supportAction || "",
         nextQuestion,
         decisionLogId: decisionLogId || null,
@@ -1438,13 +1602,86 @@ const handleSuggestedRoundResult = async (req, res) => {
       });
     }
 
-    progress.status = "stuck";
+    if (isHarderChallenge) {
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+      progress.lastActivityAt = new Date();
+
+      const nextQuestion = await findCurrentQuestionFromSequence(progress);
+
+      if (nextQuestion) {
+        progress.currentQuestion = nextQuestion._id;
+      }
+
+      progress.lastRecommendation = {
+        action: "RETRY_MAIN_QUESTION_AFTER_CHALLENGE",
+        message:
+          "Harder challenge was incorrect. Student should retry the same main question.",
+        nextQuestion: nextQuestion?._id || null,
+      };
+
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        passed: false,
+        recoveryFinished: true,
+        message: "Challenge incorrect. Try the same main question again.",
+        nextAction: "RETRY_MAIN_QUESTION_AFTER_RECOVERY",
+        supportAction: supportAction || "",
+        nextQuestion,
+        decisionLogId: decisionLogId || null,
+        progress,
+      });
+    }
+
+    if (!recoveryFinished) {
+      progress.status = "recovery";
+      progress.stuckQuestion = stuckQuestionId || progress.stuckQuestion;
+      progress.lastActivityAt = new Date();
+
+      progress.lastRecommendation = {
+        action: "CONTINUE_RECOVERY_TASKS",
+        message:
+          "Recovery answer was wrong. Continue to the next recovery question.",
+        nextQuestion: null,
+      };
+
+      await progress.save();
+
+      return res.status(200).json({
+        success: true,
+        passed: false,
+        recoveryFinished: false,
+        message: "Incorrect recovery answer. Try the next recovery question.",
+        nextAction: "CONTINUE_RECOVERY_TASKS",
+        attemptedCount: recoveryAttempted,
+        totalQuestions: recoveryTotal,
+        supportAction: supportAction || "",
+        decisionLogId: decisionLogId || null,
+        progress,
+      });
+    }
+
+    const reviewStartedAt = new Date();
+    const reviewUnlockAt = new Date(
+      reviewStartedAt.getTime() + REVIEW_MINUTES * 60 * 1000
+    );
+
+    progress.status = "needs_review";
     progress.stuckQuestion = stuckQuestionId || progress.stuckQuestion;
+    progress.currentQuestion = null;
+
+    progress.reviewStartedAt = reviewStartedAt;
+    progress.reviewUnlockAt = reviewUnlockAt;
+    progress.reviewReason = `Recovery failed: ${correctCount}/${totalQuestions}`;
+    progress.reviewSupportAction = supportAction || "";
+
     progress.lastActivityAt = new Date();
 
     progress.lastRecommendation = {
-      action: "NEEDS_MORE_SUPPORT",
-      message: `Student failed recovery round with ${correctCount}/${totalQuestions}. Q-learning should select another support action.`,
+      action: "WAIT_REVIEW_TIME",
+      message: `Student failed all recovery questions with ${correctCount}/${totalQuestions}. Student should review this concept for ${REVIEW_MINUTES} minutes before retrying the same main question.`,
       nextQuestion: null,
     };
 
@@ -1453,9 +1690,13 @@ const handleSuggestedRoundResult = async (req, res) => {
     return res.status(200).json({
       success: true,
       passed: false,
-      message: `Recovery not completed. You got ${correctCount}/${totalQuestions}. More support is needed.`,
+      recoveryFinished: true,
+      message: `Recovery not completed. You got ${correctCount}/${totalQuestions}. Please study this concept for ${REVIEW_MINUTES} minutes before retrying.`,
       masteryLevel: "low",
-      nextAction: "NEEDS_MORE_SUPPORT",
+      nextAction: "WAIT_REVIEW_TIME",
+      reviewMinutes: REVIEW_MINUTES,
+      reviewRemainingSeconds: REVIEW_MINUTES * 60,
+      reviewUnlockAt,
       supportAction: supportAction || "",
       decisionLogId: decisionLogId || null,
       progress,
@@ -1471,10 +1712,118 @@ const handleSuggestedRoundResult = async (req, res) => {
   }
 };
 
+const retryModuleAssessment = async (req, res) => {
+  try {
+    const studentId = getStudentId(req);
+    const { moduleId } = req.params;
+
+    const mainQuestionSequence =
+      await buildPedagogicalQuestionSequence(moduleId);
+
+    let progress = await StudentModuleProgress.findOne({
+      student: studentId,
+      module: moduleId,
+    });
+
+    if (!progress) {
+      progress = await StudentModuleProgress.create({
+        student: studentId,
+        module: moduleId,
+        mainQuestionSequence,
+        currentSequenceIndex: 0,
+        currentOrderNo: 1,
+        totalQuestions: mainQuestionSequence.length,
+        completedCount: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        hintUsedCount: 0,
+        score: 0,
+        percentage: 0,
+        overallMasteryScore: 0,
+        overallMasteryLevel: "low",
+        status: "in_progress",
+        completedQuestionIds: [],
+        wrongQuestionIds: [],
+        skippedQuestionIds: [],
+        blockedQuestionIds: [],
+        blockedQuestionLogs: [],
+        usedRecoveryQuestionIds: [],
+
+        reviewUnlockAt: null,
+        reviewStartedAt: null,
+        reviewReason: "",
+        reviewSupportAction: "",
+
+        startedAt: new Date(),
+        lastActivityAt: new Date(),
+      });
+    } else {
+      progress.mainQuestionSequence = mainQuestionSequence;
+      progress.currentSequenceIndex = 0;
+      progress.currentOrderNo = 1;
+      progress.totalQuestions = mainQuestionSequence.length;
+
+      progress.completedCount = 0;
+      progress.correctCount = 0;
+      progress.wrongCount = 0;
+      progress.hintUsedCount = 0;
+      progress.score = 0;
+      progress.percentage = 0;
+      progress.overallMasteryScore = 0;
+      progress.overallMasteryLevel = "low";
+
+      progress.status = "in_progress";
+      progress.stuckQuestion = null;
+      progress.currentQuestion = null;
+
+      progress.completedQuestionIds = [];
+      progress.wrongQuestionIds = [];
+      progress.skippedQuestionIds = [];
+      progress.blockedQuestionIds = [];
+      progress.blockedQuestionLogs = [];
+      progress.usedRecoveryQuestionIds = [];
+
+      progress.reviewUnlockAt = null;
+      progress.reviewStartedAt = null;
+      progress.reviewReason = "";
+      progress.reviewSupportAction = "";
+
+      progress.startedAt = new Date();
+      progress.lastActivityAt = new Date();
+      progress.completedAt = null;
+    }
+
+    const question = await findCurrentQuestionFromSequence(progress);
+
+    if (question) {
+      progress.currentQuestion = question._id;
+    }
+
+    await progress.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Assessment restarted. You can try the module again.",
+      progress,
+      question,
+      completed: false,
+    });
+  } catch (error) {
+    console.error("RETRY MODULE ASSESSMENT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to restart assessment",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getLearningModules,
   startModule,
   getCurrentTask,
   submitTaskAnswer,
   handleSuggestedRoundResult,
+  retryModuleAssessment,
 };
