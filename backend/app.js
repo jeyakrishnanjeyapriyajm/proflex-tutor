@@ -6,7 +6,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "https://proflex-tutor.vercel.app/",
+    origin: "https://proflex-tutor.vercel.app",
     credentials: false,
   })
 );
