@@ -1,7 +1,5 @@
 const mongoose = require("mongoose");
 
-
-
 const conceptMasterySchema = new mongoose.Schema(
   {
     concept: {
@@ -92,7 +90,7 @@ const studentModuleProgressSchema = new mongoose.Schema(
     },
 
     /*
-      Main question sequence is used to store only the normal main questions.
+      Main question sequence stores only the normal main assessment questions.
       Recovery questions should not be stored here.
     */
     mainQuestionSequence: [
@@ -104,7 +102,7 @@ const studentModuleProgressSchema = new mongoose.Schema(
 
     /*
       0 means first question in mainQuestionSequence.
-      If you still use currentOrderNo in controller, keep both fields.
+      currentOrderNo is kept for UI/backward compatibility.
     */
     currentSequenceIndex: {
       type: Number,
@@ -212,6 +210,10 @@ const studentModuleProgressSchema = new mongoose.Schema(
       },
     ],
 
+    /*
+      Main questions blocked for this student.
+      Example: explanation shown, so same main question should not be retried.
+    */
     blockedQuestionIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -224,6 +226,42 @@ const studentModuleProgressSchema = new mongoose.Schema(
       default: [],
     },
 
+    /*
+      Recovery questions already shown to this student in this module.
+      This prevents the same recovery question appearing again and again.
+    */
+    usedRecoveryQuestionIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Question",
+      },
+    ],
+
+    /*
+      Review timer fields.
+      Used when recovery practice fails.
+      Student must review the concept for 5/10 minutes before retrying.
+    */
+    reviewUnlockAt: {
+      type: Date,
+      default: null,
+    },
+
+    reviewStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    reviewReason: {
+      type: String,
+      default: "",
+    },
+
+    reviewSupportAction: {
+      type: String,
+      default: "",
+    },
+
     status: {
       type: String,
       enum: [
@@ -231,6 +269,7 @@ const studentModuleProgressSchema = new mongoose.Schema(
         "in_progress",
         "stuck",
         "recovery",
+        "needs_review",
         "completed",
       ],
       default: "not_started",

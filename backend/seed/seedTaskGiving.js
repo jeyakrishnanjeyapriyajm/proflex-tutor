@@ -33,7 +33,7 @@ const seedLearningModules = async () => {
     code: "INPUT_OUTPUT",
     description: "Basic printf and scanf, format specifiers, escape sequences MCQ practice.",
     orderNo: 1,
-    totalQuestions: 24,
+    totalQuestions: 36,
     isActive: true,
   });
 
@@ -423,7 +423,7 @@ const seedLearningModules = async () => {
     code: "VARIABLES_DATA_TYPES",
     description: "Variables, data types, constants, scope and initialization MCQ practice.",
     orderNo: 2,
-    totalQuestions: 24,
+    totalQuestions: 36,
     isActive: true,
   });
 
@@ -804,7 +804,7 @@ const seedLearningModules = async () => {
     code: "LOOPS",
     description: "for, while, do-while, nested loops, break and continue MCQ practice.",
     orderNo: 3,
-    totalQuestions: 24,
+    totalQuestions: 36,
     isActive: true,
   });
 
@@ -1185,7 +1185,7 @@ const seedLearningModules = async () => {
     code: "FUNCTIONS",
     description: "Function declaration, definition, parameters, recursion, scope and prototypes MCQ practice.",
     orderNo: 4,
-    totalQuestions: 24,
+    totalQuestions: 36,
     isActive: true,
   });
 
@@ -1556,6 +1556,760 @@ const seedLearningModules = async () => {
       explanation: "Passing pointer allows function to modify the caller's variable."
     }
   ];
+
+
+  // ─────────────────────────────────────────────
+  // EXTRA QUESTIONS FOR RECOVERY PRACTICE
+  // 12 more questions per module: 4 easy, 4 medium, 4 hard
+  // ─────────────────────────────────────────────
+
+  const additionalModule1Questions = [
+    {
+      concept: "Input / Output",
+      difficulty: "easy",
+      orderNo: 25,
+      questionText: "Which format specifier is used to print a double value using printf()?",
+      options: [
+        { label: "A", text: "%d", misconceptionTag: "int_confusion" },
+        { label: "B", text: "%lf", misconceptionTag: "scanf_printf_mixup" },
+        { label: "C", text: "%f", misconceptionTag: "" },
+        { label: "D", text: "%c", misconceptionTag: "char_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "printf uses %f for both float and double values.",
+      explanation: "In printf(), %f is used to print floating-point values. Float arguments are promoted to double in variadic functions."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "easy",
+      orderNo: 26,
+      questionText: "Which escape sequence is used to print a backslash character?",
+      options: [
+        { label: "A", text: "\\\\", misconceptionTag: "" },
+        { label: "B", text: "\\n", misconceptionTag: "newline_confusion" },
+        { label: "C", text: "\\t", misconceptionTag: "tab_confusion" },
+        { label: "D", text: "//", misconceptionTag: "comment_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "A backslash must be escaped using another backslash.",
+      explanation: "\\\\ prints one backslash because the first backslash escapes the second one."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "easy",
+      orderNo: 27,
+      questionText: "Which function can be used to print a single character to the screen?",
+      options: [
+        { label: "A", text: "putchar()", misconceptionTag: "" },
+        { label: "B", text: "getchar()", misconceptionTag: "input_output_mixup" },
+        { label: "C", text: "scanf()", misconceptionTag: "input_mixup" },
+        { label: "D", text: "readchar()", misconceptionTag: "non_c_function" },
+      ],
+      correctAnswer: "A",
+      hint: "The name means put one character.",
+      explanation: "putchar() prints a single character to standard output."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "easy",
+      orderNo: 28,
+      questionText: "Which function can read one character from standard input?",
+      options: [
+        { label: "A", text: "putchar()", misconceptionTag: "output_mixup" },
+        { label: "B", text: "getchar()", misconceptionTag: "" },
+        { label: "C", text: "printf()", misconceptionTag: "output_mixup" },
+        { label: "D", text: "printchar()", misconceptionTag: "non_c_function" },
+      ],
+      correctAnswer: "B",
+      hint: "The name means get one character.",
+      explanation: "getchar() reads one character from standard input."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "medium",
+      orderNo: 29,
+      questionText: "What is the correct scanf() statement to read a float variable f?",
+      options: [
+        { label: "A", text: "scanf(\"%f\", f);", misconceptionTag: "missing_address" },
+        { label: "B", text: "scanf(\"%d\", &f);", misconceptionTag: "wrong_specifier" },
+        { label: "C", text: "scanf(\"%f\", &f);", misconceptionTag: "" },
+        { label: "D", text: "scanf(\"%lf\", &f);", misconceptionTag: "double_float_mixup" },
+      ],
+      correctAnswer: "C",
+      hint: "scanf needs both the correct specifier and address.",
+      explanation: "For a float variable, scanf uses %f and the address &f."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "medium",
+      orderNo: 30,
+      questionText: "What is the output of printf(\"%.2f\", 3.14159);?",
+      options: [
+        { label: "A", text: "3.14159", misconceptionTag: "precision_ignored" },
+        { label: "B", text: "3.14", misconceptionTag: "" },
+        { label: "C", text: "3", misconceptionTag: "integer_confusion" },
+        { label: "D", text: "3.15", misconceptionTag: "wrong_rounding" },
+      ],
+      correctAnswer: "B",
+      hint: "%.2f prints two digits after the decimal point.",
+      explanation: "%.2f formats the floating-point number to two decimal places, so 3.14159 becomes 3.14."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "medium",
+      orderNo: 31,
+      questionText: "What is the output of printf(\"%5d\", 42);?",
+      options: [
+        { label: "A", text: "42", misconceptionTag: "width_ignored" },
+        { label: "B", text: "00042", misconceptionTag: "zero_padding_confusion" },
+        { label: "C", text: "   42", misconceptionTag: "" },
+        { label: "D", text: "42   ", misconceptionTag: "left_align_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "%5d means width 5, right aligned by default.",
+      explanation: "%5d prints the integer in a field of width 5, adding spaces before 42."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "medium",
+      orderNo: 32,
+      questionText: "What is the output of printf(\"%-5dX\", 42);?",
+      options: [
+        { label: "A", text: "42   X", misconceptionTag: "" },
+        { label: "B", text: "   42X", misconceptionTag: "right_align_confusion" },
+        { label: "C", text: "00042X", misconceptionTag: "zero_padding_confusion" },
+        { label: "D", text: "42X", misconceptionTag: "width_ignored" },
+      ],
+      correctAnswer: "A",
+      hint: "The minus sign makes it left aligned.",
+      explanation: "%-5d prints 42 left aligned in a width of 5, then prints X."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "hard",
+      orderNo: 33,
+      questionText: "Which scanf() format is correct for reading a double variable d?",
+      options: [
+        { label: "A", text: "scanf(\"%f\", &d);", misconceptionTag: "float_double_mixup" },
+        { label: "B", text: "scanf(\"%lf\", &d);", misconceptionTag: "" },
+        { label: "C", text: "scanf(\"%d\", &d);", misconceptionTag: "int_confusion" },
+        { label: "D", text: "scanf(\"%c\", &d);", misconceptionTag: "char_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "scanf uses %lf for double.",
+      explanation: "When reading a double using scanf(), the correct specifier is %lf."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "hard",
+      orderNo: 34,
+      questionText: "What is the problem with scanf(\"%s\", name); if name is char name[10]?",
+      options: [
+        { label: "A", text: "It cannot read characters", misconceptionTag: "string_confusion" },
+        { label: "B", text: "It may overflow if input is too long", misconceptionTag: "" },
+        { label: "C", text: "It always reads spaces", misconceptionTag: "space_confusion" },
+        { label: "D", text: "It needs &name always", misconceptionTag: "array_address_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "%s does not automatically limit input length.",
+      explanation: "scanf(\"%s\", name) can overflow the array if the user enters more characters than the array can store."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "hard",
+      orderNo: 35,
+      questionText: "Which statement correctly limits scanf string input to 9 characters for char name[10]?",
+      options: [
+        { label: "A", text: "scanf(\"%9s\", name);", misconceptionTag: "" },
+        { label: "B", text: "scanf(\"%10s\", name);", misconceptionTag: "null_terminator_confusion" },
+        { label: "C", text: "scanf(\"%s9\", name);", misconceptionTag: "wrong_syntax" },
+        { label: "D", text: "scanf(\"%s\", &name);", misconceptionTag: "array_address_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "Leave one space for the null terminator.",
+      explanation: "%9s reads at most 9 characters, leaving space for the terminating null character in a 10-character array."
+    },
+    {
+      concept: "Input / Output",
+      difficulty: "hard",
+      orderNo: 36,
+      questionText: "What does printf(\"%%\"); print?",
+      options: [
+        { label: "A", text: "%", misconceptionTag: "" },
+        { label: "B", text: "%%", misconceptionTag: "double_percent_confusion" },
+        { label: "C", text: "Nothing", misconceptionTag: "empty_output" },
+        { label: "D", text: "Error", misconceptionTag: "format_error" },
+      ],
+      correctAnswer: "A",
+      hint: "Use %% to print a literal percent sign.",
+      explanation: "In printf(), %% is used to print one percent sign."
+    }
+  ];
+
+  const additionalModule2Questions = [
+    {
+      concept: "Variables and Data Types",
+      difficulty: "easy",
+      orderNo: 25,
+      questionText: "Which data type is commonly used to store a larger integer than int?",
+      options: [
+        { label: "A", text: "long", misconceptionTag: "" },
+        { label: "B", text: "float", misconceptionTag: "decimal_confusion" },
+        { label: "C", text: "char", misconceptionTag: "char_confusion" },
+        { label: "D", text: "real", misconceptionTag: "non_c_type" },
+      ],
+      correctAnswer: "A",
+      hint: "Think of long integer.",
+      explanation: "long is commonly used when a larger integer range than int is needed."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "easy",
+      orderNo: 26,
+      questionText: "Which of the following is a valid C identifier?",
+      options: [
+        { label: "A", text: "total marks", misconceptionTag: "space_in_name" },
+        { label: "B", text: "total_marks", misconceptionTag: "" },
+        { label: "C", text: "total-marks", misconceptionTag: "hyphen_confusion" },
+        { label: "D", text: "3total", misconceptionTag: "starts_with_digit" },
+      ],
+      correctAnswer: "B",
+      hint: "Underscore is allowed; spaces and hyphens are not.",
+      explanation: "total_marks is valid because it starts with a letter and uses only letters and underscore."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "easy",
+      orderNo: 27,
+      questionText: "Which data type is used to store a single character?",
+      options: [
+        { label: "A", text: "char", misconceptionTag: "" },
+        { label: "B", text: "string", misconceptionTag: "string_confusion" },
+        { label: "C", text: "text", misconceptionTag: "non_c_type" },
+        { label: "D", text: "word", misconceptionTag: "non_c_type" },
+      ],
+      correctAnswer: "A",
+      hint: "Single character type.",
+      explanation: "char is used to store a single character in C."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "easy",
+      orderNo: 28,
+      questionText: "Which declaration stores a decimal value correctly?",
+      options: [
+        { label: "A", text: "int pi = 3.14;", misconceptionTag: "int_for_decimal" },
+        { label: "B", text: "float pi = 3.14;", misconceptionTag: "" },
+        { label: "C", text: "char pi = 3.14;", misconceptionTag: "char_confusion" },
+        { label: "D", text: "number pi = 3.14;", misconceptionTag: "non_c_type" },
+      ],
+      correctAnswer: "B",
+      hint: "Use a floating-point type.",
+      explanation: "float can store decimal values such as 3.14."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "medium",
+      orderNo: 29,
+      questionText: "What is the result of sizeof(char) in C?",
+      options: [
+        { label: "A", text: "1", misconceptionTag: "" },
+        { label: "B", text: "2", misconceptionTag: "unicode_confusion" },
+        { label: "C", text: "4", misconceptionTag: "int_confusion" },
+        { label: "D", text: "Depends on compiler", misconceptionTag: "implementation_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "The C standard defines it.",
+      explanation: "sizeof(char) is always 1 byte in C."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "medium",
+      orderNo: 30,
+      questionText: "What will int x = 5 / 2; store in x?",
+      options: [
+        { label: "A", text: "2.5", misconceptionTag: "float_division_confusion" },
+        { label: "B", text: "2", misconceptionTag: "" },
+        { label: "C", text: "3", misconceptionTag: "rounding_confusion" },
+        { label: "D", text: "Error", misconceptionTag: "division_error" },
+      ],
+      correctAnswer: "B",
+      hint: "Both operands are integers.",
+      explanation: "Integer division discards the decimal part, so 5 / 2 gives 2."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "medium",
+      orderNo: 31,
+      questionText: "What is the purpose of casting in C?",
+      options: [
+        { label: "A", text: "To change variable name", misconceptionTag: "name_confusion" },
+        { label: "B", text: "To explicitly convert one type to another", misconceptionTag: "" },
+        { label: "C", text: "To declare a function", misconceptionTag: "function_confusion" },
+        { label: "D", text: "To create a loop", misconceptionTag: "loop_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "Example: (float)x.",
+      explanation: "Casting explicitly converts a value from one type to another, such as converting int to float."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "medium",
+      orderNo: 32,
+      questionText: "What value is stored in x after int x = (int)3.99;?",
+      options: [
+        { label: "A", text: "3", misconceptionTag: "" },
+        { label: "B", text: "4", misconceptionTag: "rounding_confusion" },
+        { label: "C", text: "3.99", misconceptionTag: "no_conversion" },
+        { label: "D", text: "Error", misconceptionTag: "cast_error" },
+      ],
+      correctAnswer: "A",
+      hint: "Casting to int removes the decimal part.",
+      explanation: "The cast to int truncates the decimal part, so x stores 3."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "hard",
+      orderNo: 33,
+      questionText: "Which expression gives floating-point division for integers a and b?",
+      options: [
+        { label: "A", text: "a / b", misconceptionTag: "integer_division" },
+        { label: "B", text: "(float)a / b", misconceptionTag: "" },
+        { label: "C", text: "int(a) / b", misconceptionTag: "wrong_cast_syntax" },
+        { label: "D", text: "a // b", misconceptionTag: "python_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "Convert at least one operand to float before division.",
+      explanation: "(float)a / b makes one operand floating-point, so the division result is floating-point."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "hard",
+      orderNo: 34,
+      questionText: "What is the output?\nint x = 5;\nprintf(\"%d\", sizeof(x++));",
+      options: [
+        { label: "A", text: "5", misconceptionTag: "value_confusion" },
+        { label: "B", text: "6", misconceptionTag: "increment_confusion" },
+        { label: "C", text: "Size of int", misconceptionTag: "" },
+        { label: "D", text: "Undefined behavior", misconceptionTag: "undefined_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "sizeof does not evaluate x++ for ordinary expressions.",
+      explanation: "sizeof(x++) gives the size of the type of x. The increment is not performed in this case."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "hard",
+      orderNo: 35,
+      questionText: "Which declaration creates an unsigned integer variable?",
+      options: [
+        { label: "A", text: "unsigned int x;", misconceptionTag: "" },
+        { label: "B", text: "positive int x;", misconceptionTag: "non_c_keyword" },
+        { label: "C", text: "int unsigned x = -1;", misconceptionTag: "syntax_confusion" },
+        { label: "D", text: "nonnegative int x;", misconceptionTag: "non_c_keyword" },
+      ],
+      correctAnswer: "A",
+      hint: "C has the unsigned modifier.",
+      explanation: "unsigned int declares an integer type that stores only non-negative values."
+    },
+    {
+      concept: "Variables and Data Types",
+      difficulty: "hard",
+      orderNo: 36,
+      questionText: "What happens when an unsigned int is assigned -1?",
+      options: [
+        { label: "A", text: "It stores -1", misconceptionTag: "signed_confusion" },
+        { label: "B", text: "It becomes a large positive value", misconceptionTag: "" },
+        { label: "C", text: "Compilation always fails", misconceptionTag: "compile_error_confusion" },
+        { label: "D", text: "It stores 0", misconceptionTag: "zero_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "Unsigned values wrap modulo their range.",
+      explanation: "Assigning -1 to an unsigned integer converts it modulo the unsigned range, usually producing the maximum unsigned value."
+    }
+  ];
+
+  const additionalModule3Questions = [
+    {
+      concept: "Loops",
+      difficulty: "easy",
+      orderNo: 25,
+      questionText: "Which part of a for loop usually changes the loop variable?",
+      options: [
+        { label: "A", text: "Initialization", misconceptionTag: "initialization_confusion" },
+        { label: "B", text: "Condition", misconceptionTag: "condition_confusion" },
+        { label: "C", text: "Update expression", misconceptionTag: "" },
+        { label: "D", text: "Header file", misconceptionTag: "header_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "Usually i++ or i--.",
+      explanation: "The update expression changes the loop variable after each iteration."
+    },
+    {
+      concept: "Loops",
+      difficulty: "easy",
+      orderNo: 26,
+      questionText: "How many times does this run?\nfor(int i = 1; i <= 3; i++) printf(\"Hi\");",
+      options: [
+        { label: "A", text: "2", misconceptionTag: "off_by_one" },
+        { label: "B", text: "3", misconceptionTag: "" },
+        { label: "C", text: "4", misconceptionTag: "off_by_one" },
+        { label: "D", text: "Infinite", misconceptionTag: "infinite_loop" },
+      ],
+      correctAnswer: "B",
+      hint: "Values of i are 1, 2, and 3.",
+      explanation: "The loop runs for i = 1, 2, and 3, so it executes 3 times."
+    },
+    {
+      concept: "Loops",
+      difficulty: "easy",
+      orderNo: 27,
+      questionText: "Which loop is entry-controlled?",
+      options: [
+        { label: "A", text: "while", misconceptionTag: "" },
+        { label: "B", text: "do-while", misconceptionTag: "exit_controlled_confusion" },
+        { label: "C", text: "switch", misconceptionTag: "selection_confusion" },
+        { label: "D", text: "goto only", misconceptionTag: "goto_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "The condition is checked before entering.",
+      explanation: "while is an entry-controlled loop because the condition is tested before the body executes."
+    },
+    {
+      concept: "Loops",
+      difficulty: "easy",
+      orderNo: 28,
+      questionText: "Which statement skips to the next loop iteration?",
+      options: [
+        { label: "A", text: "break", misconceptionTag: "break_confusion" },
+        { label: "B", text: "continue", misconceptionTag: "" },
+        { label: "C", text: "return", misconceptionTag: "function_confusion" },
+        { label: "D", text: "stop", misconceptionTag: "non_c_keyword" },
+      ],
+      correctAnswer: "B",
+      hint: "It continues with the next iteration.",
+      explanation: "continue skips the rest of the current iteration and moves to the next iteration."
+    },
+    {
+      concept: "Loops",
+      difficulty: "medium",
+      orderNo: 29,
+      questionText: "What is the output?\nfor(int i=1; i<=3; i++) printf(\"%d\", i);",
+      options: [
+        { label: "A", text: "012", misconceptionTag: "start_value_confusion" },
+        { label: "B", text: "123", misconceptionTag: "" },
+        { label: "C", text: "1234", misconceptionTag: "condition_confusion" },
+        { label: "D", text: "111", misconceptionTag: "increment_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "Trace i from 1 to 3.",
+      explanation: "The loop prints i for values 1, 2, and 3, producing 123."
+    },
+    {
+      concept: "Loops",
+      difficulty: "medium",
+      orderNo: 30,
+      questionText: "What is the output?\nfor(int i=0; i<5; i+=2) printf(\"%d\", i);",
+      options: [
+        { label: "A", text: "024", misconceptionTag: "" },
+        { label: "B", text: "01234", misconceptionTag: "increment_by_one_confusion" },
+        { label: "C", text: "246", misconceptionTag: "start_value_confusion" },
+        { label: "D", text: "02", misconceptionTag: "condition_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "i increases by 2.",
+      explanation: "i takes values 0, 2, and 4 before the condition i < 5 becomes false."
+    },
+    {
+      concept: "Loops",
+      difficulty: "medium",
+      orderNo: 31,
+      questionText: "What does continue do in this loop?\nfor(int i=1;i<=3;i++){ if(i==2) continue; printf(\"%d\", i); }",
+      options: [
+        { label: "A", text: "123", misconceptionTag: "continue_ignored" },
+        { label: "B", text: "13", misconceptionTag: "" },
+        { label: "C", text: "2", misconceptionTag: "condition_confusion" },
+        { label: "D", text: "12", misconceptionTag: "break_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "When i is 2, printf is skipped.",
+      explanation: "continue skips the printf when i == 2, so only 1 and 3 are printed."
+    },
+    {
+      concept: "Loops",
+      difficulty: "medium",
+      orderNo: 32,
+      questionText: "What is the output count?\nfor(int i=0;i<2;i++){ for(int j=0;j<4;j++) printf(\"*\"); }",
+      options: [
+        { label: "A", text: "6", misconceptionTag: "wrong_multiplication" },
+        { label: "B", text: "8", misconceptionTag: "" },
+        { label: "C", text: "4", misconceptionTag: "inner_only" },
+        { label: "D", text: "2", misconceptionTag: "outer_only" },
+      ],
+      correctAnswer: "B",
+      hint: "Outer iterations × inner iterations.",
+      explanation: "The outer loop runs 2 times and the inner loop runs 4 times each, so 8 stars are printed."
+    },
+    {
+      concept: "Loops",
+      difficulty: "hard",
+      orderNo: 33,
+      questionText: "What is the output?\nint i = 5;\nwhile(i > 0) printf(\"%d\", i--);",
+      options: [
+        { label: "A", text: "54321", misconceptionTag: "" },
+        { label: "B", text: "43210", misconceptionTag: "post_decrement_confusion" },
+        { label: "C", text: "543210", misconceptionTag: "condition_confusion" },
+        { label: "D", text: "Infinite loop", misconceptionTag: "decrement_ignored" },
+      ],
+      correctAnswer: "A",
+      hint: "i is printed before being decremented.",
+      explanation: "The loop prints 5,4,3,2,1 and stops when i becomes 0."
+    },
+    {
+      concept: "Loops",
+      difficulty: "hard",
+      orderNo: 34,
+      questionText: "What is the output?\nfor(int i=1;i<=3;i++){ if(i==2) break; printf(\"%d\", i); }",
+      options: [
+        { label: "A", text: "123", misconceptionTag: "break_ignored" },
+        { label: "B", text: "13", misconceptionTag: "continue_confusion" },
+        { label: "C", text: "1", misconceptionTag: "" },
+        { label: "D", text: "2", misconceptionTag: "condition_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "break stops the loop before printing 2.",
+      explanation: "When i becomes 2, break exits the loop, so only 1 was printed."
+    },
+    {
+      concept: "Loops",
+      difficulty: "hard",
+      orderNo: 35,
+      questionText: "What is the output?\nint i = 0;\ndo { printf(\"%d\", i); i++; } while(i < 0);",
+      options: [
+        { label: "A", text: "No output", misconceptionTag: "while_confusion" },
+        { label: "B", text: "0", misconceptionTag: "" },
+        { label: "C", text: "01", misconceptionTag: "condition_confusion" },
+        { label: "D", text: "Infinite loop", misconceptionTag: "infinite_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "do-while executes once before checking the condition.",
+      explanation: "The body runs once and prints 0, then the condition i < 0 is false."
+    },
+    {
+      concept: "Loops",
+      difficulty: "hard",
+      orderNo: 36,
+      questionText: "What is the output?\nfor(int i=0;i<3;i++)\n  for(int j=0;j<i;j++)\n    printf(\"*\");",
+      options: [
+        { label: "A", text: "1 star", misconceptionTag: "outer_only" },
+        { label: "B", text: "2 stars", misconceptionTag: "wrong_count" },
+        { label: "C", text: "3 stars", misconceptionTag: "" },
+        { label: "D", text: "6 stars", misconceptionTag: "full_nested_multiply" },
+      ],
+      correctAnswer: "C",
+      hint: "Inner loop runs 0, then 1, then 2 times.",
+      explanation: "For i=0 it prints 0 stars, for i=1 it prints 1, and for i=2 it prints 2. Total = 3 stars."
+    }
+  ];
+
+  const additionalModule4Questions = [
+    {
+      concept: "Functions",
+      difficulty: "easy",
+      orderNo: 25,
+      questionText: "What is a parameter in a function?",
+      options: [
+        { label: "A", text: "A value received by a function", misconceptionTag: "" },
+        { label: "B", text: "A loop counter only", misconceptionTag: "loop_confusion" },
+        { label: "C", text: "A header file", misconceptionTag: "header_confusion" },
+        { label: "D", text: "A compiler error", misconceptionTag: "error_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "It appears inside the function parentheses.",
+      explanation: "A parameter is a variable in a function header that receives a value when the function is called."
+    },
+    {
+      concept: "Functions",
+      difficulty: "easy",
+      orderNo: 26,
+      questionText: "Which symbol pair is used after a function name?",
+      options: [
+        { label: "A", text: "[]", misconceptionTag: "array_confusion" },
+        { label: "B", text: "{}", misconceptionTag: "block_confusion" },
+        { label: "C", text: "()", misconceptionTag: "" },
+        { label: "D", text: "<> ", misconceptionTag: "header_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "Function calls use parentheses.",
+      explanation: "Function names are followed by parentheses, such as sum()."
+    },
+    {
+      concept: "Functions",
+      difficulty: "easy",
+      orderNo: 27,
+      questionText: "Which of these is a valid function call?",
+      options: [
+        { label: "A", text: "add;", misconceptionTag: "missing_parentheses" },
+        { label: "B", text: "call add();", misconceptionTag: "non_c_keyword" },
+        { label: "C", text: "add();", misconceptionTag: "" },
+        { label: "D", text: "function add;", misconceptionTag: "non_c_syntax" },
+      ],
+      correctAnswer: "C",
+      hint: "Use the function name followed by parentheses.",
+      explanation: "add(); is a valid function call in C."
+    },
+    {
+      concept: "Functions",
+      difficulty: "easy",
+      orderNo: 28,
+      questionText: "Which return type should be used for a function that returns an integer?",
+      options: [
+        { label: "A", text: "float", misconceptionTag: "float_confusion" },
+        { label: "B", text: "char", misconceptionTag: "char_confusion" },
+        { label: "C", text: "int", misconceptionTag: "" },
+        { label: "D", text: "void", misconceptionTag: "void_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "Integer return type.",
+      explanation: "A function that returns an integer should have return type int."
+    },
+    {
+      concept: "Functions",
+      difficulty: "medium",
+      orderNo: 29,
+      questionText: "What is the output?\nint add(int a, int b){ return a+b; }\nprintf(\"%d\", add(2,3));",
+      options: [
+        { label: "A", text: "2", misconceptionTag: "first_arg_only" },
+        { label: "B", text: "3", misconceptionTag: "second_arg_only" },
+        { label: "C", text: "5", misconceptionTag: "" },
+        { label: "D", text: "Error", misconceptionTag: "function_call_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "The function returns a+b.",
+      explanation: "add(2,3) returns 5, so printf prints 5."
+    },
+    {
+      concept: "Functions",
+      difficulty: "medium",
+      orderNo: 30,
+      questionText: "What is the output?\nvoid show(){ printf(\"Hi\"); }\nshow();",
+      options: [
+        { label: "A", text: "No output", misconceptionTag: "void_confusion" },
+        { label: "B", text: "Hi", misconceptionTag: "" },
+        { label: "C", text: "show", misconceptionTag: "function_name_confusion" },
+        { label: "D", text: "Error because void cannot print", misconceptionTag: "void_error_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "void means no return value, not no output.",
+      explanation: "The function show() prints Hi. A void function can still perform output."
+    },
+    {
+      concept: "Functions",
+      difficulty: "medium",
+      orderNo: 31,
+      questionText: "Which is true about return in a void function?",
+      options: [
+        { label: "A", text: "return; can be used without a value", misconceptionTag: "" },
+        { label: "B", text: "return 5; is always correct", misconceptionTag: "return_value_confusion" },
+        { label: "C", text: "return is not allowed at all", misconceptionTag: "return_not_allowed" },
+        { label: "D", text: "return must always return int", misconceptionTag: "int_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "A void function does not return a value.",
+      explanation: "A void function can use return; to exit early, but it should not return a value."
+    },
+    {
+      concept: "Functions",
+      difficulty: "medium",
+      orderNo: 32,
+      questionText: "What is the role of a function prototype?",
+      options: [
+        { label: "A", text: "It tells the compiler the function name, return type, and parameters", misconceptionTag: "" },
+        { label: "B", text: "It executes the function", misconceptionTag: "execution_confusion" },
+        { label: "C", text: "It stores local variables", misconceptionTag: "variable_confusion" },
+        { label: "D", text: "It replaces a loop", misconceptionTag: "loop_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "Declaration before definition.",
+      explanation: "A function prototype informs the compiler about the function before it is called."
+    },
+    {
+      concept: "Functions",
+      difficulty: "hard",
+      orderNo: 33,
+      questionText: "What is the output?\nint f(int x){ return x * 2; }\nprintf(\"%d\", f(f(2)));",
+      options: [
+        { label: "A", text: "2", misconceptionTag: "inner_call_ignored" },
+        { label: "B", text: "4", misconceptionTag: "one_call_only" },
+        { label: "C", text: "8", misconceptionTag: "" },
+        { label: "D", text: "Error", misconceptionTag: "nested_call_confusion" },
+      ],
+      correctAnswer: "C",
+      hint: "Evaluate the inner function call first.",
+      explanation: "f(2) gives 4, then f(4) gives 8."
+    },
+    {
+      concept: "Functions",
+      difficulty: "hard",
+      orderNo: 34,
+      questionText: "What is the output?\nint x = 5;\nvoid change(int x){ x = 10; }\nchange(x);\nprintf(\"%d\", x);",
+      options: [
+        { label: "A", text: "10", misconceptionTag: "pass_by_reference_confusion" },
+        { label: "B", text: "5", misconceptionTag: "" },
+        { label: "C", text: "0", misconceptionTag: "default_value_confusion" },
+        { label: "D", text: "Error", misconceptionTag: "function_error_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "C passes arguments by value.",
+      explanation: "change() receives a copy of x. Changing the copy does not affect the original variable in main."
+    },
+    {
+      concept: "Functions",
+      difficulty: "hard",
+      orderNo: 35,
+      questionText: "What is the output?\nvoid change(int *p){ *p = 10; }\nint x = 5;\nchange(&x);\nprintf(\"%d\", x);",
+      options: [
+        { label: "A", text: "5", misconceptionTag: "pointer_ignored" },
+        { label: "B", text: "10", misconceptionTag: "" },
+        { label: "C", text: "Address of x", misconceptionTag: "address_confusion" },
+        { label: "D", text: "Error", misconceptionTag: "pointer_syntax_confusion" },
+      ],
+      correctAnswer: "B",
+      hint: "The function receives the address of x.",
+      explanation: "Using a pointer allows the function to modify the original variable, so x becomes 10."
+    },
+    {
+      concept: "Functions",
+      difficulty: "hard",
+      orderNo: 36,
+      questionText: "What is the base case in recursion?",
+      options: [
+        { label: "A", text: "The condition that stops recursive calls", misconceptionTag: "" },
+        { label: "B", text: "The first function parameter", misconceptionTag: "parameter_confusion" },
+        { label: "C", text: "The return type", misconceptionTag: "return_type_confusion" },
+        { label: "D", text: "The main function", misconceptionTag: "main_confusion" },
+      ],
+      correctAnswer: "A",
+      hint: "Without it, recursion does not stop.",
+      explanation: "The base case is the stopping condition that prevents infinite recursion."
+    }
+  ];
+
+  module1Questions.push(...additionalModule1Questions);
+  module2Questions.push(...additionalModule2Questions);
+  module3Questions.push(...additionalModule3Questions);
+  module4Questions.push(...additionalModule4Questions);
+
+  module1.totalQuestions = module1Questions.length;
+  module2.totalQuestions = module2Questions.length;
+  module3.totalQuestions = module3Questions.length;
+  module4.totalQuestions = module4Questions.length;
+
+  await module1.save();
+  await module2.save();
+  await module3.save();
+  await module4.save();
+
 
   const allQuestions = [
     ...addModuleToQuestions(module1Questions, module1._id),
