@@ -75,6 +75,7 @@ const StudentTaskGivingPanel = () => {
 
   const [decisionMeta, setDecisionMeta] = useState(null);
   const [questionLocked, setQuestionLocked] = useState(false);
+  const [questionLockReason, setQuestionLockReason] = useState("");
   const [recoveryPopupOpen, setRecoveryPopupOpen] = useState(false);
 
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
@@ -140,6 +141,7 @@ const StudentTaskGivingPanel = () => {
     setSupport(null);
     setDecisionMeta(null);
     setQuestionLocked(false);
+    setQuestionLockReason("");
     setRecoveryPopupOpen(false);
 
     setSuggestedQuestions([]);
@@ -277,20 +279,20 @@ const StudentTaskGivingPanel = () => {
       return (
         responseSupport.explanation ||
         responseSupport.hint ||
-        "Read this explanation, then continue with recovery practice."
+        "Read this explanation, then complete recovery practice. After one correct recovery answer, you will retry the same main question."
       );
     }
 
     if (supportAction === "easier_task") {
-      return "The current question is locked. Complete this easier recovery practice first.";
+      return "Complete easier recovery practice first. After practice, you will retry the same main question.";
     }
 
     if (supportAction === "similar_task") {
-      return "The current question is locked. Complete this similar recovery practice first.";
+      return "Complete similar recovery practice first. After practice, you will retry the same main question.";
     }
 
     if (supportAction === "harder_challenge") {
-      return "Complete this challenge recovery practice before continuing.";
+      return "Complete one challenge question. If correct, you can move to the next main question. If wrong, retry the same main question.";
     }
 
     if (supportAction === "retry_same_question") {
@@ -311,16 +313,19 @@ const StudentTaskGivingPanel = () => {
       : [];
 
     const hasRecoveryQuestions = recoveryQuestions.length > 0;
-    const shouldLockQuestion =
-      supportAction === "explanation" ||
-      (PRACTICE_ACTIONS.includes(supportAction) && hasRecoveryQuestions) ||
-      Boolean(data.blockedQuestionId);
+    const shouldPauseForRecovery =
+      RECOVERY_SUPPORT_ACTIONS.includes(supportAction) && hasRecoveryQuestions;
+
+    // Main question is never permanently blocked. It is only paused while
+    // recovery practice is active.
+    const shouldLockQuestion = shouldPauseForRecovery;
+    const lockReason = shouldPauseForRecovery ? "practice_required" : "";
 
     setProgress(data.progress || progress);
     setSelectedAnswer("");
 
     setStuckData({
-      questionId: data.blockedQuestionId || task?._id,
+      questionId: task?._id,
       concept: data.difficultyAnalysis?.concept || data.support?.concept,
       difficulty:
         data.difficultyAnalysis?.effectiveDifficulty ||
@@ -345,30 +350,21 @@ const StudentTaskGivingPanel = () => {
 
     setSuggestedQuestions(recoveryQuestions);
     resetRecoveryRound();
-    setQuestionLocked(shouldLockQuestion);
 
-    if (
-      RECOVERY_SUPPORT_ACTIONS.includes(supportAction) &&
-      hasRecoveryQuestions
-    ) {
+    setQuestionLocked(shouldLockQuestion);
+    setQuestionLockReason(lockReason);
+
+    if (shouldPauseForRecovery) {
       setInSuggestedMode(false);
       setRecoveryPopupOpen(true);
+
       showMessage(
         supportAction === "explanation"
-          ? "Explanation displayed. This question is locked. Continue with recovery practice."
-          : "Recovery practice is required before continuing the main sequence.",
+          ? "Explanation displayed. Complete recovery practice. One correct recovery answer lets you retry the same main question."
+          : "Recovery practice is required. One correct recovery answer lets you retry the same main question.",
         "warning",
       );
-      return;
-    }
 
-    if (supportAction === "explanation") {
-      setInSuggestedMode(false);
-      setRecoveryPopupOpen(false);
-      showMessage(
-        "Explanation displayed. This question is locked because the answer was explained.",
-        "warning",
-      );
       return;
     }
 
@@ -382,7 +378,7 @@ const StudentTaskGivingPanel = () => {
   const handleSubmitAnswer = async () => {
     if (questionLocked) {
       showMessage(
-        "This question is locked. Continue with the recovery practice instead of answering the explained question again.",
+        "This question is paused. Complete the recovery practice first.",
         "warning",
       );
       return;
@@ -419,7 +415,10 @@ const StudentTaskGivingPanel = () => {
 
       setProgress(data.progress || progress);
 
-      if (data.nextAction === "NEXT_SEQUENTIAL_TASK") {
+      if (
+        data.nextAction === "NEXT_SEQUENTIAL_TASK" ||
+        data.nextAction === "NEXT_SEQUENTIAL_TASK_AFTER_CHALLENGE"
+      ) {
         setTask(data.nextQuestion);
         setSelectedAnswer("");
         setSupport(null);
@@ -470,6 +469,25 @@ const StudentTaskGivingPanel = () => {
         showMessage(data.message || "Module completed.", "success");
         return;
       }
+      if (data.nextAction === "EXIT_ASSESSMENT_REVIEW_CONCEPT") {
+        setTask(null);
+        setSelectedAnswer("");
+        setSupport(null);
+        setStuckData(null);
+        setDecisionMeta(null);
+        setSuggestedQuestions([]);
+        setQuestionLocked(true);
+        setQuestionLockReason("needs_review");
+        setRecoveryPopupOpen(false);
+
+        showMessage(
+          data.message ||
+            "Assessment paused. Please study this concept again before retrying.",
+          "warning",
+        );
+
+        return;
+      }
 
       showMessage(data.message || "Answer submitted.", "info");
     } catch (error) {
@@ -505,7 +523,7 @@ const StudentTaskGivingPanel = () => {
     const current = suggestedQuestions[suggestedIndex];
 
     if (!current) {
-      setSuggestedMessage("No suggested question found.");
+      setSuggestedMessage("No recovery question found.");
       return;
     }
 
@@ -522,86 +540,123 @@ const StudentTaskGivingPanel = () => {
 
     setCorrectCount(newCorrectCount);
     setAnsweredCount(newAnsweredCount);
-    setSuggestedMessage(isCorrect ? "Correct!" : "Incorrect. Continue.");
+    setSuggestedMessage(
+      isCorrect ? "Correct!" : "Incorrect. Checking next step...",
+    );
 
-    const isLastQuestion = suggestedIndex === suggestedQuestions.length - 1;
+    try {
+      setLoading(true);
 
-    if (!isLastQuestion) {
-      setTimeout(() => {
-        setSuggestedIndex((index) => index + 1);
-        setSuggestedAnswer("");
-        setSuggestedMessage("");
-      }, 700);
-      return;
-    }
+      const result = await submitSuggestedRoundResult({
+        moduleId: selectedModule._id,
+        correctCount: isCorrect ? 1 : 0,
+        totalQuestions: suggestedQuestions.length,
+        attemptedCount: newAnsweredCount,
+        stuckQuestionId: stuckData?.questionId,
+        decisionLogId: decisionMeta?.decisionLogId,
+        supportAction: decisionMeta?.supportAction,
+      });
 
-    setTimeout(async () => {
-      try {
-        setLoading(true);
+      setProgress(result.progress || progress);
 
-        const result = await submitSuggestedRoundResult({
-          moduleId: selectedModule._id,
-          correctCount: newCorrectCount,
-          totalQuestions: suggestedQuestions.length,
-          stuckQuestionId: stuckData?.questionId,
-          decisionLogId: decisionMeta?.decisionLogId,
-          supportAction: decisionMeta?.supportAction,
-        });
+      if (result.nextAction === "CONTINUE_RECOVERY_TASKS") {
+        const nextIndex = suggestedIndex + 1;
 
-        setProgress(result.progress || progress);
-
-        if (result.nextAction === "CONTINUE_MAIN_SEQUENCE") {
-          setRoundResult("pass");
-          setSuggestedMessage(result.message || "Recovery completed.");
-
-          setTimeout(() => {
-            resetTaskUi();
-
-            if (result.nextQuestion) {
-              setTask(result.nextQuestion);
-              setProgress(result.progress || progress);
-              setQuestionLocked(false);
-              setStartedAt(Date.now());
-              setElapsedSeconds(0);
-            } else {
-              handleLoadCurrentTask();
-            }
-          }, 1200);
-
-          return;
-        }
-
-        if (result.nextAction === "MODULE_COMPLETED") {
-          setRoundResult("pass");
-          setSuggestedMessage(result.message || "Module completed.");
-
-          setTimeout(() => {
-            resetTaskUi();
-            setTask(null);
-            showMessage("Module completed.", "success");
-          }, 1200);
-
-          return;
-        }
-
-        if (result.nextAction === "NEEDS_MORE_SUPPORT") {
-          setRoundResult("fail");
+        if (nextIndex < suggestedQuestions.length) {
+          setSuggestedIndex(nextIndex);
+          setSuggestedAnswer("");
           setSuggestedMessage(
-            result.message || "More support is needed for this concept.",
+            result.message || "Try the next recovery question.",
           );
-          return;
         }
 
-        setSuggestedMessage(result.message || "Recovery result processed.");
-      } catch (error) {
-        showMessage(
-          error.response?.data?.message || "Could not process recovery result.",
-          "error",
-        );
-      } finally {
-        setLoading(false);
+        return;
       }
-    }, 700);
+
+      if (
+        result.nextAction === "RETRY_MAIN_QUESTION_AFTER_RECOVERY" ||
+        result.nextAction === "RETRY_MAIN_QUESTION_AFTER_REVIEW"
+      ) {
+        setRoundResult(isCorrect ? "pass" : null);
+        setSuggestedMessage(
+          result.message ||
+            "Recovery completed. Try the same main question again.",
+        );
+
+        const nextTask = result.nextQuestion || task;
+
+        resetTaskUi();
+        setTask(nextTask);
+        setProgress(result.progress || progress);
+        setQuestionLocked(false);
+        setQuestionLockReason("");
+        setStartedAt(Date.now());
+        setElapsedSeconds(0);
+
+        showMessage(
+          result.message || "Now try the same main question again.",
+          isCorrect ? "success" : "warning",
+        );
+
+        return;
+      }
+
+      if (result.nextAction === "NEXT_SEQUENTIAL_TASK_AFTER_CHALLENGE") {
+        resetTaskUi();
+        setTask(result.nextQuestion);
+        setProgress(result.progress || progress);
+        setStartedAt(Date.now());
+        setElapsedSeconds(0);
+        showMessage(
+          result.message || "Challenge correct. Next main question unlocked.",
+          "success",
+        );
+        return;
+      }
+
+      if (result.nextAction === "MODULE_COMPLETED") {
+        resetTaskUi();
+        setTask(null);
+        setProgress(result.progress || progress);
+        showMessage(result.message || "Module completed.", "success");
+        return;
+      }
+
+      if (
+        result.nextAction === "WAIT_REVIEW_TIME" ||
+        result.nextAction === "EXIT_ASSESSMENT_REVIEW_CONCEPT" ||
+        result.nextAction === "NEEDS_MORE_SUPPORT"
+      ) {
+        setRoundResult("fail");
+        setInSuggestedMode(false);
+        setQuestionLocked(true);
+        setQuestionLockReason("needs_review");
+        setRecoveryPopupOpen(false);
+        setSuggestedQuestions([]);
+
+        setSuggestedMessage(
+          result.message ||
+            "Recovery not completed. Please study this concept before retrying.",
+        );
+
+        showMessage(
+          result.message ||
+            "Assessment paused. Please study this concept before retrying.",
+          "warning",
+        );
+
+        return;
+      }
+
+      setSuggestedMessage(result.message || "Recovery result processed.");
+    } catch (error) {
+      showMessage(
+        error.response?.data?.message || "Could not process recovery result.",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -855,9 +910,9 @@ const StudentTaskGivingPanel = () => {
                       <div className="mb-6 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-800">
                         <Lock size={20} className="mt-0.5 shrink-0" />
                         <p className="text-sm font-bold leading-6">
-                          This main question is locked after
-                          support/explanation. You cannot answer it again. Start
-                          recovery practice to continue.
+                          {questionLockReason === "explanation_blocked"
+                            ? "This main question is paused while recovery practice is active. One correct recovery answer lets you retry it."
+                            : "This main question is paused until you complete recovery practice. After practice, you can retry the same main question."}
                         </p>
                       </div>
                     )}
@@ -1121,7 +1176,8 @@ const StudentTaskGivingPanel = () => {
 
                 <p className="text-sm font-semibold leading-7 text-orange-800">
                   You got {correctCount}/{suggestedQuestions.length} correct.
-                  More support is needed before continuing this module.
+                  Please study this concept again before retrying the
+                  assessment.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-3">
@@ -1273,9 +1329,9 @@ const StudentTaskGivingPanel = () => {
                     </h3>
 
                     <p className="mt-3 text-sm font-semibold leading-7 text-slate-500">
-                      The current question has been blocked after support. You
-                      cannot answer the same question again now. Complete the
-                      recovery practice to continue the main question sequence.
+                      {questionLockReason === "explanation_blocked"
+                        ? "The current main question is paused while recovery practice is active. Complete one recovery question correctly to retry the same main question."
+                        : "Complete recovery practice first. After practice, you will retry the same main question."}
                     </p>
 
                     <div className="mt-6 grid grid-cols-2 gap-3">
@@ -1304,7 +1360,9 @@ const StudentTaskGivingPanel = () => {
                       className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-6 py-5 text-sm font-black text-white shadow-lg shadow-purple-100 transition-all hover:bg-purple-700"
                     >
                       <CheckCircle2 size={20} />
-                      Start Recovery Practice
+                      {questionLockReason === "explanation_blocked"
+                        ? "Start Recovery Practice"
+                        : "Start Practice Before Retry"}
                     </button>
                   </div>
                 </div>

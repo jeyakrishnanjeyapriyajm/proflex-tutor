@@ -117,12 +117,18 @@ def decide_recovery_count_from_agent_state(
     available_count,
 ):
     """
-    Adaptive recovery count decision.
+    Q-agent recovery count decision.
 
-    This decision is made inside the AI model, not backend.
+    The backend must not decide the count for explanation/easier/similar.
+    The AI model returns the count, then the backend only caps it by MongoDB
+    availability and removes already-used recovery questions.
 
-    available_count comes from backend because backend knows how many
-    questions exist in MongoDB for that concept/difficulty.
+    Required action ranges:
+    - explanation: 1 to 3 recovery questions
+    - easier_task: 2 to 5 recovery questions
+    - similar_task: 1 to 2 recovery questions
+    - harder_challenge: exactly 1 recovery question
+    - simple_hint / retry_same_question: 0 recovery questions
     """
 
     available_count = safe_int(available_count, 0)
@@ -130,59 +136,70 @@ def decide_recovery_count_from_agent_state(
     if available_count <= 0:
         return 0
 
-    count_score = 1
-
-    if mastery_level == "low":
-        count_score += 2
-
-    if mastery_level == "medium":
-        count_score += 1
-
-    if safe_int(attempt_no) >= 3:
-        count_score += 1
-
-    if safe_float(previous_wrong_rate) >= 0.65:
-        count_score += 1
-
-    if safe_int(previous_stuck_count) >= 2:
-        count_score += 1
-
-    if time_status == "slow":
-        count_score += 1
-
-    if support_action == "explanation":
-        count_score += 1
-
-    if support_action == "easier_task":
-        count_score += 2
-
-    if support_action == "similar_task":
-        count_score += 1
+    if support_action in ["simple_hint", "retry_same_question"]:
+        return 0
 
     if support_action == "harder_challenge":
-        count_score = 1
+        return min(1, available_count)
 
-    if support_action in ["simple_hint", "retry_same_question"]:
-        count_score = 0
+    risk_score = 0
 
-    return max(0, min(count_score, available_count))
+    if mastery_level == "low":
+        risk_score += 2
+    elif mastery_level == "medium":
+        risk_score += 1
+
+    if safe_int(attempt_no) >= 3:
+        risk_score += 1
+
+    if safe_float(previous_wrong_rate) >= 0.65:
+        risk_score += 1
+
+    if safe_int(previous_stuck_count) >= 2:
+        risk_score += 1
+
+    if time_status == "slow":
+        risk_score += 1
+
+    if support_action == "explanation":
+        # Agent decides inside 1-3 range.
+        if risk_score >= 4:
+            count = 3
+        elif risk_score >= 2:
+            count = 2
+        else:
+            count = 1
+        return min(count, available_count)
+
+    if support_action == "easier_task":
+        # Agent decides inside 2-5 range.
+        count = 2 + min(3, risk_score)
+        return min(count, available_count)
+
+    if support_action == "similar_task":
+        # Agent decides inside 1-2 range.
+        count = 2 if risk_score >= 2 else 1
+        return min(count, available_count)
+
+    return 0
 
 
 def should_block_question_from_action(support_action):
     """
-    Decide whether current question should be blocked for this student.
+    Current main question is never blocked in the new flow.
 
-    Your rule:
-    If explanation is shown once, same question cannot be retried by same student.
+    The student returns to the same main question after:
+    - simple hint
+    - explanation recovery success
+    - easier/similar recovery success
+    - 5-minute concept review
+
+    Only harder_challenge success can skip to the next main question.
+    Recovery repetition is controlled by usedRecoveryQuestionIds in the backend.
     """
 
-    if support_action == "explanation":
-        return True
-
-    if support_action in ["easier_task", "similar_task", "harder_challenge"]:
-        return True
-
     return False
+
 
 def get_attempt_bucket(attempt_no):
     attempt_no = safe_int(attempt_no, 1)
@@ -338,7 +355,10 @@ def detect_stuck(
 ):
     """
     Behavior-based stuck detection.
-    No skip logic is used.
+
+    Important rule:
+    - A first wrong answer with normal time and no hint is NOT stuck.
+    - Q-learning starts only after the student is stuck.
     """
 
     if is_correct:
@@ -353,7 +373,8 @@ def detect_stuck(
     if hint_used:
         return True, "hint_requested"
 
-    if final_mastery_probability < 0.35:
+    # First normal wrong answer should retry the same question without support.
+    if attempt_no >= 2 and final_mastery_probability < 0.35:
         return True, "low_mastery"
 
     if student_previous_concept_wrong_rate >= 0.65:
@@ -371,26 +392,25 @@ def detect_stuck(
 def recovery_difficulty_from_action(action, current_difficulty, mastery_level):
     current_difficulty = normalize_difficulty(current_difficulty)
 
+    if action == "explanation":
+        # Explanation recovery stays at the same difficulty.
+        return current_difficulty
+
     if action == "easier_task":
+        # Easier recovery moves one level down when possible.
         if current_difficulty == "hard":
             return "medium"
-
         return "easy"
 
     if action == "similar_task":
+        # Similar recovery uses the same difficulty.
         return current_difficulty
 
     if action == "harder_challenge":
-        if mastery_level == "low":
-            return current_difficulty
-
+        # Harder challenge is allowed only for high mastery by ql_agent.py.
         if current_difficulty == "easy":
             return "medium"
-
         return "hard"
-
-    if action in ["simple_hint", "explanation", "retry_same_question"]:
-        return current_difficulty
 
     return current_difficulty
 
