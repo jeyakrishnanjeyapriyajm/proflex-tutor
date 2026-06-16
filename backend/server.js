@@ -14,6 +14,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://proflex-tutor.vercel.app",
+  "https://proflex-tutor-akfyxc71l-jeyas-projects-999d4ec8.vercel.app/",
 ];
 
 const corsOptions = {
