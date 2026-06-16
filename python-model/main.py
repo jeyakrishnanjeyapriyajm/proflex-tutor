@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from models.bkt_model import BKTModel
 from models.ql_agent import QLearningAgent
@@ -60,6 +60,10 @@ class InteractionPayload(BaseModel):
     student_previous_average_time: float = 0.0
 
     previous_mastery_probability: Optional[float] = None
+
+    # Backend sends this so the Q-agent can decide the recovery count
+    # without asking for more questions than MongoDB has available.
+    available_recovery_counts: Optional[Dict[str, int]] = None
 
 
 class RewardPayload(BaseModel):

@@ -30,69 +30,55 @@ class QLearningAgent:
         """
         Filter actions based on mastery level.
 
-        Your q_state format:
-        (
-            module_id,
-            concept,
-            effective_question_difficulty,
-            question_difficulty_band,
-            mastery_level,
-            attempt_bucket,
-            time_status,
-            hint_used,
-            misconception_tag,
-            previous_wrong_band,
-            previous_stuck_band
-        )
+        New flow:
+        - retry_same_question is not a stuck-support action.
+        - low/medium mastery cannot receive harder_challenge.
+        - harder_challenge is only for high mastery.
         """
 
         mastery_level = "medium"
         current_difficulty = "medium"
-        attempt_bucket = "attempt_1"
 
         try:
             current_difficulty = state[2]
             mastery_level = state[4]
-            attempt_bucket = state[5]
         except Exception:
             pass
 
-        # Low mastery: avoid harder challenge.
         if mastery_level == "low":
             return [
                 "simple_hint",
                 "explanation",
                 "easier_task",
-                "retry_same_question",
             ]
 
-        # Medium mastery: allow similar/easier/explanation.
         if mastery_level == "medium":
             return [
                 "simple_hint",
                 "explanation",
                 "easier_task",
                 "similar_task",
-                "retry_same_question",
             ]
 
-        # High mastery: allow challenge and retry.
         if mastery_level == "high":
             if current_difficulty == "hard":
                 return [
                     "similar_task",
-                    "retry_same_question",
                     "simple_hint",
                 ]
 
             return [
                 "similar_task",
                 "harder_challenge",
-                "retry_same_question",
                 "simple_hint",
             ]
 
-        return list(self.actions)
+        return [
+            "simple_hint",
+            "explanation",
+            "easier_task",
+            "similar_task",
+        ]
 
     def choose_action(self, state):
         """
