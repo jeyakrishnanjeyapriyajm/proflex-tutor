@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js",
+     "dev": "npm --prefix backend run dev",
+  "start": "npm --prefix backend start"
     "seed:task": "node seed/seedTaskGiving.js"
   },
   "keywords": [],
