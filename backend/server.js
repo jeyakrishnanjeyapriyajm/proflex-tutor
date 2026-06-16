@@ -12,7 +12,7 @@ const difficultyRoutes = require("./routes/difficultyRoutes");
 
 app.use(
   cors({
-    origin: "https://proflex-tutor.vercel.app",
+    origin: process.env.FRONTEND_URL || "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
