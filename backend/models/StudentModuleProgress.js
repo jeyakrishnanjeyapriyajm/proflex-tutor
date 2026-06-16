@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 
+
+
 const conceptMasterySchema = new mongoose.Schema(
   {
     concept: {
@@ -24,19 +26,48 @@ const conceptMasterySchema = new mongoose.Schema(
     correctCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     wrongCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     hintUsedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     lastUpdatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const blockedQuestionLogSchema = new mongoose.Schema(
+  {
+    question: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Question",
+      required: true,
+    },
+
+    reason: {
+      type: String,
+      default: "",
+    },
+
+    supportAction: {
+      type: String,
+      default: "",
+    },
+
+    blockedAt: {
       type: Date,
       default: Date.now,
     },
@@ -60,6 +91,27 @@ const studentModuleProgressSchema = new mongoose.Schema(
       index: true,
     },
 
+    /*
+      Main question sequence is used to store only the normal main questions.
+      Recovery questions should not be stored here.
+    */
+    mainQuestionSequence: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Question",
+      },
+    ],
+
+    /*
+      0 means first question in mainQuestionSequence.
+      If you still use currentOrderNo in controller, keep both fields.
+    */
+    currentSequenceIndex: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     currentOrderNo: {
       type: Number,
       default: 1,
@@ -75,31 +127,37 @@ const studentModuleProgressSchema = new mongoose.Schema(
     totalQuestions: {
       type: Number,
       default: 10,
+      min: 0,
     },
 
     completedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     correctCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     wrongCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     skippedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     hintUsedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     score: {
@@ -154,9 +212,27 @@ const studentModuleProgressSchema = new mongoose.Schema(
       },
     ],
 
+    blockedQuestionIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Question",
+      },
+    ],
+
+    blockedQuestionLogs: {
+      type: [blockedQuestionLogSchema],
+      default: [],
+    },
+
     status: {
       type: String,
-      enum: ["not_started", "in_progress", "stuck", "completed"],
+      enum: [
+        "not_started",
+        "in_progress",
+        "stuck",
+        "recovery",
+        "completed",
+      ],
       default: "not_started",
       index: true,
     },
@@ -188,6 +264,7 @@ const studentModuleProgressSchema = new mongoose.Schema(
     totalTimeSpentSeconds: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     startedAt: {
@@ -215,6 +292,12 @@ studentModuleProgressSchema.index(
 
 studentModuleProgressSchema.index({ student: 1, status: 1 });
 studentModuleProgressSchema.index({ module: 1, status: 1 });
+studentModuleProgressSchema.index({ student: 1, module: 1, currentOrderNo: 1 });
+studentModuleProgressSchema.index({
+  student: 1,
+  module: 1,
+  currentSequenceIndex: 1,
+});
 
 module.exports = mongoose.model(
   "StudentModuleProgress",

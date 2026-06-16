@@ -3,15 +3,11 @@ from collections import defaultdict
 
 SUPPORT_ACTIONS = [
     "simple_hint",
-    "detailed_hint",
     "explanation",
-    "worked_example",
     "easier_task",
     "similar_task",
     "harder_challenge",
-    "revision_note",
-    "code_tracing_steps",
-    "retry_same_question",
+    "retry_same_question"
 ]
 
 
@@ -110,6 +106,83 @@ def get_time_status(seconds, difficulty):
 
     return "normal"
 
+
+def decide_recovery_count_from_agent_state(
+    support_action,
+    mastery_level,
+    attempt_no,
+    previous_wrong_rate,
+    previous_stuck_count,
+    time_status,
+    available_count,
+):
+    """
+    Adaptive recovery count decision.
+
+    This decision is made inside the AI model, not backend.
+
+    available_count comes from backend because backend knows how many
+    questions exist in MongoDB for that concept/difficulty.
+    """
+
+    available_count = safe_int(available_count, 0)
+
+    if available_count <= 0:
+        return 0
+
+    count_score = 1
+
+    if mastery_level == "low":
+        count_score += 2
+
+    if mastery_level == "medium":
+        count_score += 1
+
+    if safe_int(attempt_no) >= 3:
+        count_score += 1
+
+    if safe_float(previous_wrong_rate) >= 0.65:
+        count_score += 1
+
+    if safe_int(previous_stuck_count) >= 2:
+        count_score += 1
+
+    if time_status == "slow":
+        count_score += 1
+
+    if support_action == "explanation":
+        count_score += 1
+
+    if support_action == "easier_task":
+        count_score += 2
+
+    if support_action == "similar_task":
+        count_score += 1
+
+    if support_action == "harder_challenge":
+        count_score = 1
+
+    if support_action in ["simple_hint", "retry_same_question"]:
+        count_score = 0
+
+    return max(0, min(count_score, available_count))
+
+
+def should_block_question_from_action(support_action):
+    """
+    Decide whether current question should be blocked for this student.
+
+    Your rule:
+    If explanation is shown once, same question cannot be retried by same student.
+    """
+
+    if support_action == "explanation":
+        return True
+
+    if support_action in ["easier_task", "similar_task", "harder_challenge"]:
+        return True
+
+    return False
 
 def get_attempt_bucket(attempt_no):
     attempt_no = safe_int(attempt_no, 1)
@@ -299,30 +372,25 @@ def recovery_difficulty_from_action(action, current_difficulty, mastery_level):
     current_difficulty = normalize_difficulty(current_difficulty)
 
     if action == "easier_task":
+        if current_difficulty == "hard":
+            return "medium"
+
         return "easy"
 
     if action == "similar_task":
         return current_difficulty
 
     if action == "harder_challenge":
+        if mastery_level == "low":
+            return current_difficulty
+
+        if current_difficulty == "easy":
+            return "medium"
+
         return "hard"
 
-    if action in [
-        "simple_hint",
-        "detailed_hint",
-        "explanation",
-        "worked_example",
-        "revision_note",
-        "code_tracing_steps",
-        "retry_same_question",
-    ]:
+    if action in ["simple_hint", "explanation", "retry_same_question"]:
         return current_difficulty
-
-    if mastery_level == "low":
-        return "easy"
-
-    if mastery_level == "medium":
-        return "medium"
 
     return current_difficulty
 
@@ -337,8 +405,10 @@ def calculate_support_reward_seed(
     previous_stuck_count,
 ):
     """
-    Initial reward explanation.
-    Real Q-learning reward should be updated after the student uses the support.
+    Initial reward seed.
+
+    This is not the final reward.
+    Final Q-learning reward should come after the student uses the support.
     """
 
     reward = 0
@@ -351,51 +421,80 @@ def calculate_support_reward_seed(
     if is_stuck:
         reward -= 3
 
-    if mastery_level == "low" and action in [
-        "worked_example",
-        "easier_task",
-        "code_tracing_steps",
-        "explanation",
-    ]:
-        reward += 4
+    # Low mastery students need stronger help.
+    if mastery_level == "low":
+        if action == "easier_task":
+            reward += 5
 
-    if mastery_level == "medium" and action in [
-        "detailed_hint",
-        "similar_task",
-        "explanation",
-    ]:
-        reward += 3
+        elif action == "explanation":
+            reward += 4
 
-    if mastery_level == "high" and action in [
-        "retry_same_question",
-        "harder_challenge",
-        "similar_task",
-    ]:
-        reward += 3
+        elif action == "simple_hint":
+            reward += 2
 
-    if mastery_level == "low" and action == "harder_challenge":
-        reward -= 6
+        elif action == "harder_challenge":
+            reward -= 8
 
+        elif action == "retry_same_question":
+            reward -= 3
+
+    # Medium mastery students can use hint, explanation, or similar task.
+    elif mastery_level == "medium":
+        if action == "similar_task":
+            reward += 4
+
+        elif action == "explanation":
+            reward += 3
+
+        elif action == "simple_hint":
+            reward += 2
+
+        elif action == "easier_task":
+            reward += 1
+
+        elif action == "harder_challenge":
+            reward -= 2
+
+    # High mastery students should not always receive hints.
+    elif mastery_level == "high":
+        if action == "harder_challenge":
+            reward += 5
+
+        elif action == "similar_task":
+            reward += 4
+
+        elif action == "retry_same_question":
+            reward += 3
+
+        elif action == "simple_hint":
+            reward -= 1
+
+        elif action == "explanation":
+            reward -= 1
+
+    # If the question itself is hard and the student has low mastery,
+    # easier_task or explanation is safer than retrying blindly.
     if effective_question_difficulty == "hard" and mastery_level == "low":
-        if action in ["worked_example", "easier_task", "code_tracing_steps"]:
+        if action in ["easier_task", "explanation"]:
             reward += 3
 
         if action == "retry_same_question":
             reward -= 3
 
-    if previous_wrong_rate >= 0.65 and action in [
-        "worked_example",
-        "easier_task",
-        "explanation",
-    ]:
-        reward += 2
+    # Previous poor performance means the learner needs stronger support.
+    if previous_wrong_rate >= 0.65:
+        if action in ["easier_task", "explanation"]:
+            reward += 2
 
-    if previous_stuck_count >= 2 and action in [
-        "revision_note",
-        "worked_example",
-        "code_tracing_steps",
-    ]:
-        reward += 2
+        if action == "simple_hint":
+            reward -= 1
+
+    if previous_stuck_count >= 2:
+        if action in ["easier_task", "explanation"]:
+            reward += 2
+
+        if action == "simple_hint":
+            reward -= 1
 
     return reward
 
@@ -569,13 +668,16 @@ class DifficultyAnalysisWithBKTRL:
             "stuck_reason": stuck_reason,
         }
 
-        if not is_stuck:
+        # Correct answer:
+        # Do not ask the Q-agent for support.
+        # Backend should continue the stored main question sequence.
+        if is_correct:
             return {
                 "student_id": student_id,
                 "question_id": question_id,
                 "module_id": module_id,
                 "concept": concept,
-                "is_correct": is_correct,
+                "is_correct": True,
                 "bkt_mastery_probability": round(bkt_mastery_probability, 4),
                 "behavior_mastery_probability": round(
                     behavior_mastery_probability,
@@ -584,13 +686,18 @@ class DifficultyAnalysisWithBKTRL:
                 "final_mastery_probability": round(final_mastery_probability, 4),
                 "mastery_level": mastery_level_value,
                 "is_stuck": False,
-                "stuck_reason": stuck_reason,
-                "recommended_support_action": "retry_same_question",
+                "stuck_reason": "not_stuck",
+                "recommended_support_action": "continue_main_sequence",
                 "recommended_next_difficulty": effective_question_difficulty,
+                "recommended_recovery_count": 0,
+                "should_block_current_question": False,
+                "post_recovery_decision": "continue_main_sequence",
+                "available_recovery_counts": {},
+                "available_count_for_difficulty": 0,
                 "state": base_state,
                 "q_state": [],
-                "q_action": "retry_same_question",
-                "reward": 0,
+                "q_action": "continue_main_sequence",
+                "reward": 5,
             }
 
         q_state = (
@@ -609,10 +716,37 @@ class DifficultyAnalysisWithBKTRL:
 
         support_action = self.support_agent.choose_action(q_state)
 
+        if support_action not in SUPPORT_ACTIONS:
+            support_action = "simple_hint"
+
         recommended_next_difficulty = recovery_difficulty_from_action(
             support_action,
             effective_question_difficulty,
             mastery_level_value,
+        )
+
+        available_recovery_counts = interaction.get("available_recovery_counts", {})
+
+        if not isinstance(available_recovery_counts, dict):
+            available_recovery_counts = {}
+
+        available_count_for_difficulty = safe_int(
+            available_recovery_counts.get(recommended_next_difficulty, 0),
+            0,
+        )
+
+        recommended_recovery_count = decide_recovery_count_from_agent_state(
+            support_action=support_action,
+            mastery_level=mastery_level_value,
+            attempt_no=attempt_no,
+            previous_wrong_rate=student_previous_concept_wrong_rate,
+            previous_stuck_count=student_previous_concept_stuck_count,
+            time_status=time_status,
+            available_count=available_count_for_difficulty,
+        )
+
+        should_block_current_question = should_block_question_from_action(
+            support_action
         )
 
         reward_seed = calculate_support_reward_seed(
@@ -638,10 +772,15 @@ class DifficultyAnalysisWithBKTRL:
             ),
             "final_mastery_probability": round(final_mastery_probability, 4),
             "mastery_level": mastery_level_value,
-            "is_stuck": True,
+            "is_stuck": bool(is_stuck),
             "stuck_reason": stuck_reason,
             "recommended_support_action": support_action,
             "recommended_next_difficulty": recommended_next_difficulty,
+            "recommended_recovery_count": recommended_recovery_count,
+            "should_block_current_question": should_block_current_question,
+            "post_recovery_decision": "ask_q_agent_again",
+            "available_recovery_counts": available_recovery_counts,
+            "available_count_for_difficulty": available_count_for_difficulty,
             "state": base_state,
             "q_state": list(q_state),
             "q_action": support_action,
