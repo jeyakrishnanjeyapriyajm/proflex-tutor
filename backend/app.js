@@ -7,7 +7,9 @@ const app = express();
 app.use(
   cors({
     origin: "https://proflex-tutor.vercel.app",
-    credentials: false,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
