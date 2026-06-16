@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ClipboardCheck,
   Clock,
   Lightbulb,
   BookOpen,
-  Sparkles,
   ChevronRight,
   Target,
   Hash,
   Trophy,
   RotateCcw,
   ArrowLeft,
+  Lock,
+  X,
+  CheckCircle2,
+  PlayCircle,
 } from "lucide-react";
 
 import Loading from "../common/Loading";
@@ -24,66 +27,190 @@ import {
   submitSuggestedRoundResult,
 } from "../../services/taskGivingService";
 
-const PASS_THRESHOLD = 3;
+const RECOVERY_SUPPORT_ACTIONS = [
+  "explanation",
+  "easier_task",
+  "similar_task",
+  "harder_challenge",
+];
+
+const PRACTICE_ACTIONS = ["easier_task", "similar_task", "harder_challenge"];
+
+const difficultyBadgeClass = (difficulty) => {
+  if (difficulty === "easy") return "bg-emerald-100 text-emerald-700";
+  if (difficulty === "medium") return "bg-amber-100 text-amber-700";
+  return "bg-rose-100 text-rose-700";
+};
+
+const difficultyBarClass = (difficulty) => {
+  if (difficulty === "easy") return "bg-emerald-500";
+  if (difficulty === "medium") return "bg-amber-500";
+  return "bg-rose-500";
+};
+
+const formatSeconds = (seconds) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(safeSeconds / 60);
+  const secs = safeSeconds % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+};
 
 const StudentTaskGivingPanel = () => {
   const [modules, setModules] = useState([]);
   const [selectedModule, setSelectedModule] = useState(null);
   const [task, setTask] = useState(null);
+  const [progress, setProgress] = useState(null);
+
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [startedAt, setStartedAt] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
   const [stuckData, setStuckData] = useState(null);
   const [support, setSupport] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [loadingModules, setLoadingModules] = useState(true);
 
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [decisionMeta, setDecisionMeta] = useState(null);
+  const [questionLocked, setQuestionLocked] = useState(false);
+  const [recoveryPopupOpen, setRecoveryPopupOpen] = useState(false);
+
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [suggestedIndex, setSuggestedIndex] = useState(0);
   const [inSuggestedMode, setInSuggestedMode] = useState(false);
   const [suggestedAnswer, setSuggestedAnswer] = useState("");
   const [suggestedMessage, setSuggestedMessage] = useState("");
-  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
   const [correctCount, setCorrectCount] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [roundResult, setRoundResult] = useState(null);
 
-  const resetTaskUi = () => {
-    setSelectedAnswer("");
-    setStuckData(null);
-    setSupport(null);
-    setMessage("");
-    setAnalysisResult(null);
-    setSuggestedQuestions([]);
+  const isQuestionPageOpen = Boolean(selectedModule);
+  const currentSuggestedQuestion = suggestedQuestions[suggestedIndex];
+
+  const totalQuestions =
+    progress?.totalQuestions || selectedModule?.totalQuestions || 10;
+  const currentQuestionNumber = Math.min(
+    totalQuestions,
+    (progress?.currentSequenceIndex ?? 0) + 1,
+  );
+  const completedCount = progress?.completedCount || 0;
+  const progressPercent = totalQuestions
+    ? Math.min(100, Math.round((completedCount / totalQuestions) * 100))
+    : 0;
+
+  const canAnswerCurrentQuestion = Boolean(task) && !questionLocked && !loading;
+
+  const messageClass = useMemo(() => {
+    if (messageType === "success") {
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    }
+
+    if (messageType === "error") {
+      return "border-rose-200 bg-rose-50 text-rose-800";
+    }
+
+    if (messageType === "warning") {
+      return "border-orange-200 bg-orange-50 text-orange-800";
+    }
+
+    return "border-slate-100 bg-white text-slate-600";
+  }, [messageType]);
+
+  const showMessage = (text, type = "info") => {
+    setMessage(text || "");
+    setMessageType(type);
+  };
+
+  const resetRecoveryRound = () => {
     setSuggestedIndex(0);
-    setInSuggestedMode(false);
     setSuggestedAnswer("");
     setSuggestedMessage("");
     setCorrectCount(0);
     setAnsweredCount(0);
     setRoundResult(null);
-    setLoadingAnalysis(false);
+  };
+
+  const resetTaskUi = () => {
+    setSelectedAnswer("");
+    showMessage("");
+    setStuckData(null);
+    setSupport(null);
+    setDecisionMeta(null);
+    setQuestionLocked(false);
+    setRecoveryPopupOpen(false);
+
+    setSuggestedQuestions([]);
+    setSuggestedIndex(0);
+    setInSuggestedMode(false);
+    setSuggestedAnswer("");
+    setSuggestedMessage("");
+
+    setCorrectCount(0);
+    setAnsweredCount(0);
+    setRoundResult(null);
   };
 
   const handleExitQuestion = () => {
     setTask(null);
+    setProgress(null);
     setSelectedModule(null);
+    setStartedAt(null);
+    setElapsedSeconds(0);
     resetTaskUi();
   };
 
   const loadModules = async () => {
     try {
       setLoadingModules(true);
-      setMessage("");
+      showMessage("");
+
       const data = await getTaskModules();
       setModules(data.modules || []);
     } catch (error) {
-      setMessage(error.response?.data?.message || "Could not load modules.");
+      showMessage(
+        error.response?.data?.message || "Could not load modules.",
+        "error",
+      );
     } finally {
       setLoadingModules(false);
     }
+  };
+
+  const applyLoadedTask = (data) => {
+    setProgress(data.progress || null);
+
+    if (data.completed) {
+      setTask(null);
+      setStartedAt(null);
+      setElapsedSeconds(0);
+      showMessage(
+        `Module completed. Score: ${data.score || data.progress?.score || 0}`,
+        "success",
+      );
+      return;
+    }
+
+    if (!data.question) {
+      setTask(null);
+      setStartedAt(null);
+      setElapsedSeconds(0);
+      showMessage(
+        data.message ||
+          "This module is waiting for recovery support. Complete the recovery practice before continuing.",
+        "warning",
+      );
+      return;
+    }
+
+    setTask(data.question);
+    setSelectedAnswer("");
+    setQuestionLocked(false);
+    setRecoveryPopupOpen(false);
+    setStartedAt(Date.now());
+    setElapsedSeconds(0);
   };
 
   const handleStartModule = async (module) => {
@@ -91,20 +218,19 @@ const StudentTaskGivingPanel = () => {
       setLoading(true);
       setSelectedModule(module);
       setTask(null);
+      setProgress(null);
       resetTaskUi();
 
-      await startTaskModule(module._id);
-      const data = await getCurrentTask(module._id);
+      const startData = await startTaskModule(module._id);
+      setProgress(startData.progress || null);
 
-      if (data.completed) {
-        setTask(null);
-        setMessage(`Module completed. Score: ${data.score}`);
-      } else {
-        setTask(data.question);
-        setStartedAt(Date.now());
-      }
+      const data = await getCurrentTask(module._id);
+      applyLoadedTask(data);
     } catch (error) {
-      setMessage(error.response?.data?.message || "Could not start module.");
+      showMessage(
+        error.response?.data?.message || "Could not start module.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -118,107 +244,170 @@ const StudentTaskGivingPanel = () => {
       resetTaskUi();
 
       const data = await getCurrentTask(selectedModule._id);
-
-      if (data.completed) {
-        setTask(null);
-        setMessage(`Module completed. Score: ${data.score}`);
-      } else {
-        setTask(data.question);
-        setStartedAt(Date.now());
-      }
+      applyLoadedTask(data);
     } catch (error) {
-      setMessage(error.response?.data?.message || "Could not load task.");
+      showMessage(
+        error.response?.data?.message || "Could not load task.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  const getSupportTitle = (supportAction) => {
+    if (supportAction === "simple_hint") return "Helpful Hint";
+    if (supportAction === "explanation") return "Explanation";
+    if (supportAction === "easier_task") return "Easier Recovery Practice";
+    if (supportAction === "similar_task") return "Similar Recovery Practice";
+    if (supportAction === "harder_challenge")
+      return "Challenge Recovery Practice";
+    if (supportAction === "retry_same_question") return "Try Again";
+    return "Learning Support";
   };
 
   const getSupportText = (supportAction, responseSupport) => {
     if (!responseSupport) return "";
 
     if (supportAction === "simple_hint") {
-      return responseSupport.hint || "Review the basic idea and try again.";
-    }
-
-    if (supportAction === "detailed_hint") {
-      return (
-        responseSupport.detailedHint ||
-        responseSupport.hint ||
-        "Use the detailed hint and retry."
-      );
+      return responseSupport.hint || "Review the key idea and try again.";
     }
 
     if (supportAction === "explanation") {
       return (
         responseSupport.explanation ||
-        responseSupport.detailedHint ||
         responseSupport.hint ||
-        "Read the explanation and retry."
-      );
-    }
-
-    if (supportAction === "worked_example") {
-      return (
-        responseSupport.explanation ||
-        responseSupport.detailedHint ||
-        "Study this worked example style explanation and retry."
-      );
-    }
-
-    if (supportAction === "code_tracing_steps") {
-      return (
-        responseSupport.explanation ||
-        responseSupport.detailedHint ||
-        "Trace the code step by step before retrying."
-      );
-    }
-
-    if (supportAction === "revision_note") {
-      return (
-        responseSupport.detailedHint ||
-        responseSupport.explanation ||
-        "Revise this concept before retrying."
+        "Read this explanation, then continue with recovery practice."
       );
     }
 
     if (supportAction === "easier_task") {
-      return (
-        responseSupport.hint ||
-        "Try an easier related task to rebuild the concept."
-      );
+      return "The current question is locked. Complete this easier recovery practice first.";
     }
 
     if (supportAction === "similar_task") {
-      return (
-        responseSupport.hint ||
-        "Try a similar task to strengthen the same concept."
-      );
+      return "The current question is locked. Complete this similar recovery practice first.";
     }
 
     if (supportAction === "harder_challenge") {
-      return "You are ready for a harder challenge.";
+      return "Complete this challenge recovery practice before continuing.";
+    }
+
+    if (supportAction === "retry_same_question") {
+      return "Try the same question again carefully.";
     }
 
     return responseSupport.hint || responseSupport.explanation || "";
   };
 
+  const applySupportResponse = ({ data, timeTakenSeconds }) => {
+    const supportAction =
+      data.decisionMaking?.recommendedSupportAction ||
+      data.support?.action ||
+      "simple_hint";
+
+    const recoveryQuestions = Array.isArray(data.recoveryQuestions)
+      ? data.recoveryQuestions
+      : [];
+
+    const hasRecoveryQuestions = recoveryQuestions.length > 0;
+    const shouldLockQuestion =
+      supportAction === "explanation" ||
+      (PRACTICE_ACTIONS.includes(supportAction) && hasRecoveryQuestions) ||
+      Boolean(data.blockedQuestionId);
+
+    setProgress(data.progress || progress);
+    setSelectedAnswer("");
+
+    setStuckData({
+      questionId: data.blockedQuestionId || task?._id,
+      concept: data.difficultyAnalysis?.concept || data.support?.concept,
+      difficulty:
+        data.difficultyAnalysis?.effectiveDifficulty ||
+        data.support?.difficulty,
+      attemptNo: data.attemptNo,
+      timeTakenSeconds,
+      misconceptionTag: data.support?.misconceptionTag || "unknown",
+      stuckReason: data.stuckAnalysis?.stuckReason || data.stuckReason,
+    });
+
+    setDecisionMeta({
+      decisionLogId: data.decisionMaking?.decisionLogId,
+      supportAction,
+    });
+
+    setSupport({
+      type: supportAction,
+      title: getSupportTitle(supportAction),
+      text: getSupportText(supportAction, data.support),
+      recommendedDifficulty: data.support?.recommendedDifficulty,
+    });
+
+    setSuggestedQuestions(recoveryQuestions);
+    resetRecoveryRound();
+    setQuestionLocked(shouldLockQuestion);
+
+    if (
+      RECOVERY_SUPPORT_ACTIONS.includes(supportAction) &&
+      hasRecoveryQuestions
+    ) {
+      setInSuggestedMode(false);
+      setRecoveryPopupOpen(true);
+      showMessage(
+        supportAction === "explanation"
+          ? "Explanation displayed. This question is locked. Continue with recovery practice."
+          : "Recovery practice is required before continuing the main sequence.",
+        "warning",
+      );
+      return;
+    }
+
+    if (supportAction === "explanation") {
+      setInSuggestedMode(false);
+      setRecoveryPopupOpen(false);
+      showMessage(
+        "Explanation displayed. This question is locked because the answer was explained.",
+        "warning",
+      );
+      return;
+    }
+
+    setInSuggestedMode(false);
+    setRecoveryPopupOpen(false);
+    setStartedAt(Date.now());
+    setElapsedSeconds(0);
+    showMessage(data.message || "Use the support and try again.", "info");
+  };
+
   const handleSubmitAnswer = async () => {
+    if (questionLocked) {
+      showMessage(
+        "This question is locked. Continue with the recovery practice instead of answering the explained question again.",
+        "warning",
+      );
+      return;
+    }
+
     if (!selectedAnswer) {
-      setMessage("Please select one answer.");
+      showMessage("Please select one answer.", "warning");
       return;
     }
 
     if (!selectedModule?._id || !task?._id) {
-      setMessage("Module or task is missing.");
+      showMessage("Module or task is missing.", "error");
       return;
     }
 
     try {
       setLoading(true);
-      setMessage("");
+      showMessage("");
       setStuckData(null);
 
-      const timeTakenSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      const timeTakenSeconds =
+        elapsedSeconds ||
+        (startedAt
+          ? Math.max(1, Math.floor((Date.now() - startedAt) / 1000))
+          : 0);
 
       const data = await submitTaskAnswer({
         moduleId: selectedModule._id,
@@ -228,15 +417,23 @@ const StudentTaskGivingPanel = () => {
         hintRequested: false,
       });
 
-      setMessage(data.message || "");
+      setProgress(data.progress || progress);
 
       if (data.nextAction === "NEXT_SEQUENTIAL_TASK") {
         setTask(data.nextQuestion);
         setSelectedAnswer("");
         setSupport(null);
         setStuckData(null);
-        setAnalysisResult(null);
+        setDecisionMeta(null);
+        setSuggestedQuestions([]);
+        setQuestionLocked(false);
+        setRecoveryPopupOpen(false);
+        showMessage(
+          data.message || "Correct. Next question unlocked.",
+          "success",
+        );
         setStartedAt(Date.now());
+        setElapsedSeconds(0);
         return;
       }
 
@@ -244,47 +441,20 @@ const StudentTaskGivingPanel = () => {
         setSelectedAnswer("");
         setSupport(null);
         setStuckData(null);
-        setAnalysisResult(data.difficultyAnalysis || null);
+        setDecisionMeta(null);
+        setQuestionLocked(false);
+        setRecoveryPopupOpen(false);
+        showMessage(data.message || "Try the same question again.", "warning");
         setStartedAt(Date.now());
+        setElapsedSeconds(0);
         return;
       }
 
-      if (data.nextAction === "SHOW_Q_LEARNING_SUPPORT") {
-        const supportAction = data.decisionMaking?.recommendedSupportAction;
-        const supportText = getSupportText(supportAction, data.support);
-
-        setSelectedAnswer("");
-
-        setStuckData({
-          concept: data.difficultyAnalysis?.concept || data.support?.concept,
-          difficulty:
-            data.difficultyAnalysis?.effectiveDifficulty ||
-            data.support?.difficulty,
-          attemptNo: data.attemptNo,
-          timeTakenSeconds,
-          misconceptionTag: data.support?.misconceptionTag || "unknown",
-          stuckReason: data.stuckAnalysis?.stuckReason || data.stuckReason,
-        });
-
-        setAnalysisResult({
-          mastery_level: data.difficultyAnalysis?.masteryLevel,
-          recommended_next_difficulty:
-            data.decisionMaking?.recommendedNextDifficulty,
-          recommended_support_action: supportAction,
-          decisionLogId: data.decisionMaking?.decisionLogId,
-        });
-
-        setSupport({
-          type: supportAction || "simple_hint",
-          text: supportText,
-        });
-
-        setMessage(
-          `Q-learning selected support: ${
-            supportAction?.replace(/_/g, " ") || "support"
-          }`,
-        );
-
+      if (
+        data.nextAction === "SHOW_RECOVERY_TASKS" ||
+        data.nextAction === "SHOW_Q_LEARNING_SUPPORT"
+      ) {
+        applySupportResponse({ data, timeTakenSeconds });
         return;
       }
 
@@ -293,14 +463,37 @@ const StudentTaskGivingPanel = () => {
         setSelectedAnswer("");
         setSupport(null);
         setStuckData(null);
-        setAnalysisResult(data.difficultyAnalysis || null);
+        setDecisionMeta(null);
+        setSuggestedQuestions([]);
+        setQuestionLocked(false);
+        setRecoveryPopupOpen(false);
+        showMessage(data.message || "Module completed.", "success");
         return;
       }
+
+      showMessage(data.message || "Answer submitted.", "info");
     } catch (error) {
-      setMessage(error.response?.data?.message || "Could not submit answer.");
+      showMessage(
+        error.response?.data?.message || "Could not submit answer.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  const startRecoveryPractice = () => {
+    if (!suggestedQuestions.length) {
+      showMessage(
+        "No recovery questions are available for this concept. Please ask the lecturer to add recovery questions.",
+        "warning",
+      );
+      return;
+    }
+
+    resetRecoveryRound();
+    setRecoveryPopupOpen(false);
+    setInSuggestedMode(true);
   };
 
   const handleSuggestedSubmit = async () => {
@@ -316,23 +509,29 @@ const StudentTaskGivingPanel = () => {
       return;
     }
 
-    const isCorrect = suggestedAnswer === current.correctAnswer;
+    if (!current.correctAnswer) {
+      setSuggestedMessage(
+        "Recovery answer key is missing. Please check backend recovery question response.",
+      );
+      return;
+    }
 
+    const isCorrect = suggestedAnswer === current.correctAnswer;
     const newCorrectCount = isCorrect ? correctCount + 1 : correctCount;
     const newAnsweredCount = answeredCount + 1;
 
     setCorrectCount(newCorrectCount);
     setAnsweredCount(newAnsweredCount);
-    setSuggestedMessage(isCorrect ? "✅ Correct!" : "❌ Incorrect.");
+    setSuggestedMessage(isCorrect ? "Correct!" : "Incorrect. Continue.");
 
     const isLastQuestion = suggestedIndex === suggestedQuestions.length - 1;
 
     if (!isLastQuestion) {
       setTimeout(() => {
-        setSuggestedIndex((i) => i + 1);
+        setSuggestedIndex((index) => index + 1);
         setSuggestedAnswer("");
         setSuggestedMessage("");
-      }, 1000);
+      }, 700);
       return;
     }
 
@@ -345,43 +544,88 @@ const StudentTaskGivingPanel = () => {
           correctCount: newCorrectCount,
           totalQuestions: suggestedQuestions.length,
           stuckQuestionId: stuckData?.questionId,
-          decisionLogId: analysisResult?.decisionLogId,
-          supportAction: analysisResult?.recommended_support_action,
+          decisionLogId: decisionMeta?.decisionLogId,
+          supportAction: decisionMeta?.supportAction,
         });
+
+        setProgress(result.progress || progress);
 
         if (result.nextAction === "CONTINUE_MAIN_SEQUENCE") {
           setRoundResult("pass");
-          setSuggestedMessage(result.message);
+          setSuggestedMessage(result.message || "Recovery completed.");
 
           setTimeout(() => {
             resetTaskUi();
-            handleLoadCurrentTask();
-          }, 2000);
+
+            if (result.nextQuestion) {
+              setTask(result.nextQuestion);
+              setProgress(result.progress || progress);
+              setQuestionLocked(false);
+              setStartedAt(Date.now());
+              setElapsedSeconds(0);
+            } else {
+              handleLoadCurrentTask();
+            }
+          }, 1200);
+
+          return;
+        }
+
+        if (result.nextAction === "MODULE_COMPLETED") {
+          setRoundResult("pass");
+          setSuggestedMessage(result.message || "Module completed.");
+
+          setTimeout(() => {
+            resetTaskUi();
+            setTask(null);
+            showMessage("Module completed.", "success");
+          }, 1200);
+
+          return;
         }
 
         if (result.nextAction === "NEEDS_MORE_SUPPORT") {
           setRoundResult("fail");
-          setSuggestedMessage(result.message);
+          setSuggestedMessage(
+            result.message || "More support is needed for this concept.",
+          );
+          return;
         }
+
+        setSuggestedMessage(result.message || "Recovery result processed.");
       } catch (error) {
-        setMessage(
-          error.response?.data?.message || "Could not process result.",
+        showMessage(
+          error.response?.data?.message || "Could not process recovery result.",
+          "error",
         );
       } finally {
         setLoading(false);
       }
-    }, 1000);
+    }, 700);
   };
 
   useEffect(() => {
     loadModules();
   }, []);
 
-  const isQuestionPageOpen = !!selectedModule;
+  useEffect(() => {
+    if (!task || !startedAt || inSuggestedMode) return undefined;
+
+    const updateElapsed = () => {
+      setElapsedSeconds(
+        Math.max(1, Math.floor((Date.now() - startedAt) / 1000)),
+      );
+    };
+
+    updateElapsed();
+    const timerId = window.setInterval(updateElapsed, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [task, startedAt, inSuggestedMode]);
 
   return (
-    <div className="flex-1 bg-slate-50/50 font-sans">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <div className="flex-1 bg-slate-50/70 font-sans">
+      <div className="mx-auto max-w-7xl space-y-8">
         {!isQuestionPageOpen && (
           <section>
             <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -396,8 +640,9 @@ const StudentTaskGivingPanel = () => {
                 </h2>
 
                 <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-slate-500">
-                  Choose one C programming concept. The question will open in a
-                  clean workspace page with adaptive support.
+                  Choose one C programming module. The system gives main
+                  questions in order and opens recovery practice only when the
+                  backend recommends support.
                 </p>
               </div>
 
@@ -407,7 +652,9 @@ const StudentTaskGivingPanel = () => {
             </div>
 
             {message && (
-              <div className="mb-6 rounded-[2rem] border border-slate-100 bg-white p-5 text-sm font-bold text-slate-600 shadow-sm">
+              <div
+                className={`mb-6 rounded-[2rem] border p-5 text-sm font-bold shadow-sm ${messageClass}`}
+              >
                 {message}
               </div>
             )}
@@ -462,7 +709,7 @@ const StudentTaskGivingPanel = () => {
 
                         <div className="mt-6 flex flex-wrap gap-2">
                           <span className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            {module.totalQuestions || 0} Questions
+                            {module.totalQuestions || 10} Questions
                           </span>
 
                           <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-500">
@@ -513,8 +760,8 @@ const StudentTaskGivingPanel = () => {
                   </h2>
 
                   <p className="mt-1 text-sm font-medium text-slate-500">
-                    Complete the current task. Use the back arrow to return to
-                    module selection.
+                    Main question count follows the backend sequence. Recovery
+                    practice has its own count.
                   </p>
                 </div>
               </div>
@@ -539,169 +786,426 @@ const StudentTaskGivingPanel = () => {
               </div>
             </div>
 
+            {message && !inSuggestedMode && (
+              <div
+                className={`rounded-[2rem] border p-5 text-sm font-bold shadow-sm ${messageClass}`}
+              >
+                {message}
+              </div>
+            )}
+
             {loading && !task && !inSuggestedMode && (
               <Loading text="Opening selected module..." />
             )}
 
             {task && !inSuggestedMode && (
-              <div
-                className="mx-auto max-w-5xl"
-                id="task-giving-question-screen"
-              >
-                <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm">
-                      <BookOpen size={22} />
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div id="task-giving-question-screen">
+                  <div className="mb-6 grid gap-4 md:grid-cols-4">
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm md:col-span-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                        Main Question
+                      </p>
+                      <h3 className="mt-1 text-2xl font-black text-slate-900">
+                        {currentQuestionNumber} of {totalQuestions}
+                      </h3>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-sky-500 transition-all"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${
-                            task.difficulty === "easy"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : task.difficulty === "medium"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-rose-100 text-rose-700"
-                          }`}
-                        >
-                          {task.difficulty} Mastery Stream
-                        </span>
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                        Timer
+                      </p>
+                      <h3 className="mt-1 flex items-center gap-2 text-2xl font-black text-slate-900">
+                        <Clock size={22} />
+                        {formatSeconds(elapsedSeconds)}
+                      </h3>
+                    </div>
 
-                        <span className="rounded-lg border border-slate-200/60 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400">
-                          One MCQ at a time
-                        </span>
-                      </div>
-
-                      <h2 className="mt-2 text-2xl font-black text-slate-900">
-                        {selectedModule?.title || selectedModule?.name}{" "}
-                        Diagnostic Task
-                      </h2>
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                        Status
+                      </p>
+                      <h3 className="mt-1 flex items-center gap-2 text-lg font-black text-slate-900">
+                        {questionLocked ? (
+                          <>
+                            <Lock size={20} className="text-orange-600" />{" "}
+                            Locked
+                          </>
+                        ) : (
+                          <>
+                            <Target size={20} className="text-sky-600" /> Active
+                          </>
+                        )}
+                      </h3>
                     </div>
                   </div>
 
-                  <div className="w-full text-left md:w-auto md:text-right">
-                    <span className="block text-xs font-black uppercase tracking-widest text-slate-400">
-                      Session Progress Matrix
-                    </span>
+                  <div className="relative overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/30 md:p-10">
+                    <div
+                      className={`absolute left-0 right-0 top-0 h-1.5 ${difficultyBarClass(task.difficulty)}`}
+                    />
 
-                    <div className="mt-1.5 flex max-w-sm items-center gap-3 rounded-2xl border border-slate-200/60 bg-white px-4 py-2.5">
+                    {questionLocked && (
+                      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-800">
+                        <Lock size={20} className="mt-0.5 shrink-0" />
+                        <p className="text-sm font-bold leading-6">
+                          This main question is locked after
+                          support/explanation. You cannot answer it again. Start
+                          recovery practice to continue.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400">
-                          Interactive HUD
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${difficultyBadgeClass(task.difficulty)}`}
+                          >
+                            {task.difficulty} task
+                          </span>
+
+                          <span className="rounded-lg border border-slate-200/60 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400">
+                            {task.concept}
+                          </span>
+                        </div>
+
+                        <h2 className="mt-3 text-2xl font-black text-slate-900">
+                          {selectedModule?.title || selectedModule?.name}{" "}
+                          Practice
+                        </h2>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-black text-slate-500">
+                        Q {currentQuestionNumber}/{totalQuestions}
+                      </div>
+                    </div>
+
+                    <p className="mb-8 whitespace-pre-wrap text-xl font-black leading-relaxed text-slate-800">
+                      {task.questionText}
+                    </p>
+
+                    {task.codeSnippet && (
+                      <pre className="mb-8 overflow-x-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 text-sm text-emerald-400 shadow-inner">
+                        <code>{task.codeSnippet}</code>
+                      </pre>
+                    )}
+
+                    <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {task.options?.map((option) => (
+                        <label
+                          key={option.label}
+                          className={`flex items-start gap-4 rounded-2xl border-2 p-5 text-left font-bold transition-all ${
+                            questionLocked
+                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400 opacity-70"
+                              : selectedAnswer === option.label
+                                ? "cursor-pointer border-sky-600 bg-sky-50 text-sky-600 shadow-md shadow-sky-50"
+                                : "cursor-pointer border-slate-100 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="answer"
+                            value={option.label}
+                            checked={selectedAnswer === option.label}
+                            onChange={(event) =>
+                              setSelectedAnswer(event.target.value)
+                            }
+                            disabled={questionLocked}
+                            className="sr-only"
+                          />
+
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                              selectedAnswer === option.label && !questionLocked
+                                ? "bg-sky-600 text-white"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {option.label}
+                          </span>
+
+                          <span className="pt-1 text-sm font-medium leading-relaxed">
+                            {option.text}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="mt-10 flex flex-col items-center justify-between gap-6 border-t border-slate-100 pt-8 sm:flex-row">
+                      <div className="flex w-full flex-wrap gap-4 text-xs font-black uppercase tracking-widest text-slate-400 sm:w-auto">
+                        <span className="flex items-center gap-1">
+                          <Clock size={14} />
+                          {formatSeconds(elapsedSeconds)}
                         </span>
 
-                        <div className="mt-1 flex items-center gap-2">
-                          <span
-                            className={`text-xs font-black uppercase ${
-                              task.difficulty === "easy"
-                                ? "text-emerald-600"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            Easy
-                          </span>
-                          <span className="text-xs text-slate-300">→</span>
-                          <span
-                            className={`text-xs font-black uppercase ${
-                              task.difficulty === "medium"
-                                ? "text-amber-600"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            Med
-                          </span>
-                          <span className="text-xs text-slate-300">→</span>
-                          <span
-                            className={`text-xs font-black uppercase ${
-                              task.difficulty === "hard"
-                                ? "text-rose-600"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            Hard
-                          </span>
-                        </div>
+                        <span className="flex items-center gap-1">
+                          <Target size={14} />
+                          Adaptive Support
+                        </span>
                       </div>
 
-                      <div className="h-8 w-px bg-slate-200" />
-
-                      <div className="text-left font-mono">
-                        <p className="text-[10px] font-black text-slate-600">
-                          Q#{task.orderNo || 1}
-                        </p>
-
-                        <div className="mt-1 flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map((dot) => (
-                            <span
-                              key={dot}
-                              className={`h-2.5 w-2.5 rounded-full border ${
-                                dot === 1
-                                  ? "border-amber-400 bg-amber-400"
-                                  : "border-slate-200 bg-slate-100"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSubmitAnswer}
+                        disabled={!canAnswerCurrentQuestion || !selectedAnswer}
+                        className={`flex w-full items-center justify-center gap-2 rounded-2xl px-10 py-5 font-black text-white shadow-md transition-all sm:w-auto ${
+                          canAnswerCurrentQuestion && selectedAnswer
+                            ? "bg-sky-600 shadow-sky-100 hover:bg-sky-700"
+                            : "bg-slate-300"
+                        } disabled:cursor-not-allowed disabled:opacity-70`}
+                      >
+                        {loading
+                          ? "Checking..."
+                          : questionLocked
+                            ? "Question Locked"
+                            : "Submit Answer"}
+                        <ChevronRight size={20} />
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/30 md:p-12">
-                  <div
-                    className={`absolute left-0 right-0 top-0 h-1.5 ${
-                      task.difficulty === "easy"
-                        ? "bg-emerald-500"
-                        : task.difficulty === "medium"
-                          ? "bg-amber-500"
-                          : "bg-rose-500"
-                    }`}
-                  />
+                <aside className="space-y-6">
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      Difficulty Path
+                    </p>
 
-                  <div className="mb-10 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-400">
-                      Question #{task.orderNo || 1} • {task.concept}
-                    </span>
+                    <div className="mt-4 flex items-center gap-2">
+                      {["easy", "medium", "hard"].map((level, index) => (
+                        <div key={level} className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+                              task.difficulty === level
+                                ? difficultyBadgeClass(level)
+                                : "bg-slate-100 text-slate-400"
+                            }`}
+                          >
+                            {level}
+                          </span>
+                          {index < 2 && (
+                            <span className="text-slate-300">→</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                    <span className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-400">
-                      {task.difficulty}
-                    </span>
+                  {support ? (
+                    <div
+                      className={`rounded-[2rem] border p-6 shadow-sm ${support.type === "explanation" ? "border-purple-200 bg-purple-50 text-purple-900" : "border-sky-100 bg-sky-50 text-sky-800"}`}
+                    >
+                      <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest">
+                        {support.type === "simple_hint" ? (
+                          <Lightbulb size={20} />
+                        ) : (
+                          <BookOpen size={20} />
+                        )}
+                        {support.title}
+                      </div>
+
+                      <p className="whitespace-pre-wrap text-sm font-semibold leading-7">
+                        {support.text || "Use this support and try again."}
+                      </p>
+
+                      {questionLocked && suggestedQuestions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={startRecoveryPractice}
+                          className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-purple-100 transition-all hover:bg-purple-700"
+                        >
+                          <PlayCircle size={18} />
+                          Start Recovery Practice
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
+                      <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
+                        <Lightbulb size={20} />
+                        Hint / Explanation
+                      </div>
+
+                      <p className="text-sm font-semibold leading-7 text-slate-500">
+                        Hints, explanations, and error details will appear here
+                        after the backend detects stuck status.
+                      </p>
+                    </div>
+                  )}
+
+                  {stuckData && (
+                    <div className="rounded-[2rem] border border-orange-200 bg-orange-50 p-6 shadow-sm shadow-orange-100">
+                      <div className="mb-5 flex items-center gap-3 text-orange-800">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70">
+                          <AlertTriangle size={24} />
+                        </div>
+
+                        <div>
+                          <h3 className="text-lg font-black">
+                            Error / Stuck Details
+                          </h3>
+                          <p className="text-xs font-semibold text-orange-700">
+                            This is from the backend stuck-analysis response.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="rounded-2xl bg-white/70 p-4">
+                          <p className="text-xs font-black uppercase tracking-widest text-orange-500">
+                            Concept
+                          </p>
+                          <p className="font-black text-orange-900">
+                            {stuckData.concept || "-"}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-2xl bg-white/70 p-4">
+                            <p className="text-xs font-black uppercase tracking-widest text-orange-500">
+                              Attempt
+                            </p>
+                            <p className="font-black text-orange-900">
+                              {stuckData.attemptNo || 1}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl bg-white/70 p-4">
+                            <p className="text-xs font-black uppercase tracking-widest text-orange-500">
+                              Time
+                            </p>
+                            <p className="font-black text-orange-900">
+                              {stuckData.timeTakenSeconds || 0}s
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-white/70 p-4">
+                          <p className="text-xs font-black uppercase tracking-widest text-orange-500">
+                            Reason
+                          </p>
+                          <p className="font-black text-orange-900">
+                            {stuckData.stuckReason || "wrong answer"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            )}
+
+            {roundResult === "pass" && (
+              <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 text-center shadow-sm">
+                <Trophy className="mx-auto mb-3 text-emerald-600" size={36} />
+                <p className="text-sm font-black text-emerald-800">
+                  Recovery completed. You got {correctCount}/
+                  {suggestedQuestions.length} correct.
+                </p>
+              </div>
+            )}
+
+            {roundResult === "fail" && (
+              <div className="rounded-[2.5rem] border border-orange-200 bg-orange-50 p-8 shadow-sm">
+                <div className="mb-2 flex items-center gap-2 text-orange-800">
+                  <AlertTriangle size={22} />
+                  <h3 className="font-black">More Practice Needed</h3>
+                </div>
+
+                <p className="text-sm font-semibold leading-7 text-orange-800">
+                  You got {correctCount}/{suggestedQuestions.length} correct.
+                  More support is needed before continuing this module.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleExitQuestion}
+                    className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-100 transition-all hover:bg-orange-700"
+                  >
+                    Back to Modules
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {inSuggestedMode && currentSuggestedQuestion && !roundResult && (
+              <div className="mx-auto max-w-5xl">
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-purple-200 bg-white p-6 shadow-xl shadow-purple-100/40 md:p-12">
+                  <div className="absolute left-0 right-0 top-0 h-1.5 bg-purple-500" />
+
+                  <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-purple-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-700">
+                          Recovery Practice
+                        </span>
+
+                        <span className="rounded-lg border border-slate-200/60 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400">
+                          {suggestedIndex + 1} of {suggestedQuestions.length}
+                        </span>
+                      </div>
+
+                      <h2 className="mt-2 text-2xl font-black text-slate-900">
+                        {currentSuggestedQuestion.concept}
+                      </h2>
+                    </div>
+
+                    <div className="text-left md:text-right">
+                      <span
+                        className={`rounded-full px-4 py-2 text-xs font-black uppercase ${difficultyBadgeClass(currentSuggestedQuestion.difficulty)}`}
+                      >
+                        {currentSuggestedQuestion.difficulty}
+                      </span>
+
+                      <p className="mt-2 text-xs font-black uppercase tracking-widest text-slate-400">
+                        Score: {correctCount}/{answeredCount} correct
+                      </p>
+                    </div>
                   </div>
 
                   <p className="mb-8 whitespace-pre-wrap text-xl font-black leading-relaxed text-slate-800">
-                    {task.questionText}
+                    {currentSuggestedQuestion.questionText}
                   </p>
 
-                  {task.codeSnippet && (
+                  {currentSuggestedQuestion.codeSnippet && (
                     <pre className="mb-8 overflow-x-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 text-sm text-emerald-400 shadow-inner">
-                      <code>{task.codeSnippet}</code>
+                      <code>{currentSuggestedQuestion.codeSnippet}</code>
                     </pre>
                   )}
 
                   <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {task.options?.map((option) => (
+                    {currentSuggestedQuestion.options?.map((option) => (
                       <label
                         key={option.label}
                         className={`flex cursor-pointer items-start gap-4 rounded-2xl border-2 p-5 text-left font-bold transition-all ${
-                          selectedAnswer === option.label
-                            ? "border-sky-600 bg-sky-50 text-sky-600 shadow-md shadow-sky-50"
+                          suggestedAnswer === option.label
+                            ? "border-purple-600 bg-purple-50 text-purple-600 shadow-md shadow-purple-50"
                             : "border-slate-100 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                         }`}
                       >
                         <input
                           type="radio"
-                          name="answer"
+                          name="suggested-answer"
                           value={option.label}
-                          checked={selectedAnswer === option.label}
-                          onChange={(e) => setSelectedAnswer(e.target.value)}
+                          checked={suggestedAnswer === option.label}
+                          onChange={(event) =>
+                            setSuggestedAnswer(event.target.value)
+                          }
                           className="sr-only"
                         />
 
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                            selectedAnswer === option.label
-                              ? "bg-sky-600 text-white"
+                            suggestedAnswer === option.label
+                              ? "bg-purple-600 text-white"
                               : "bg-slate-100 text-slate-500"
                           }`}
                         >
@@ -715,41 +1219,31 @@ const StudentTaskGivingPanel = () => {
                     ))}
                   </div>
 
-                  <div className="mt-10 flex flex-col items-center justify-between gap-6 border-t border-slate-100 pt-8 sm:flex-row">
-                    <div className="flex w-full flex-wrap gap-4 text-xs font-black uppercase tracking-widest text-slate-400 sm:w-auto">
-                      <span className="flex items-center gap-1">
-                        <Clock size={14} />
-                        {startedAt
-                          ? Math.max(
-                              1,
-                              Math.round((Date.now() - startedAt) / 1000),
-                            )
-                          : 0}
-                        s
-                      </span>
-
-                      <span className="flex items-center gap-1">
-                        <Target size={14} />
-                        Adaptive Flow
-                      </span>
-
-                      <span className="flex items-center gap-1">
-                        <Trophy size={14} />
-                        BKT → Behavior → Q-learning
-                      </span>
+                  {suggestedMessage && (
+                    <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-5 text-sm font-black text-slate-700">
+                      {suggestedMessage}
                     </div>
+                  )}
+
+                  <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-100 pt-8 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInSuggestedMode(false);
+                        setRecoveryPopupOpen(true);
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-500 transition-all hover:bg-slate-50 sm:w-auto"
+                    >
+                      Back to Support
+                    </button>
 
                     <button
                       type="button"
-                      onClick={handleSubmitAnswer}
+                      onClick={handleSuggestedSubmit}
                       disabled={loading}
-                      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-10 py-5 font-black text-white shadow-md transition-all sm:w-auto ${
-                        selectedAnswer
-                          ? "bg-sky-600 shadow-sky-100 hover:bg-sky-700"
-                          : "bg-slate-300"
-                      } disabled:opacity-60`}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-10 py-5 font-black text-white shadow-lg shadow-purple-100 transition-all hover:bg-purple-700 disabled:opacity-60 sm:w-auto"
                     >
-                      {loading ? "Checking..." : "Submit Answer"}
+                      {loading ? "Checking..." : "Submit Recovery Answer"}
                       <ChevronRight size={20} />
                     </button>
                   </div>
@@ -757,298 +1251,61 @@ const StudentTaskGivingPanel = () => {
               </div>
             )}
 
-            {support && !inSuggestedMode && (
-              <div className="rounded-[2rem] border border-sky-100 bg-sky-50 p-6 text-sky-800 shadow-sm">
-                <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest">
-                  {support.type === "simple_hint" ? (
-                    <>
-                      <Lightbulb size={20} />
-                      Simple Hint
-                    </>
-                  ) : (
-                    <>
-                      <BookOpen size={20} />
-                      {support.type?.replace(/_/g, " ") || "Support"}
-                    </>
-                  )}
-                </div>
+            {recoveryPopupOpen &&
+              !inSuggestedMode &&
+              suggestedQuestions.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+                  <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-purple-100 bg-white p-8 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryPopupOpen(false)}
+                      className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    >
+                      <X size={18} />
+                    </button>
 
-                <p className="text-sm font-semibold leading-7">
-                  {support.text || "Use this support and try again."}
-                </p>
-              </div>
-            )}
+                    <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-purple-100 text-purple-700">
+                      <PlayCircle size={34} />
+                    </div>
 
-            {message && !inSuggestedMode && (
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 text-sm font-bold text-slate-600 shadow-sm">
-                {message}
-              </div>
-            )}
-
-            {analysisResult && !inSuggestedMode && (
-              <div className="rounded-[2.5rem] border border-purple-200 bg-purple-50 p-8 shadow-sm shadow-purple-100">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-purple-600">
-                    <Sparkles size={24} />
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600">
-                      AI Recommendation
-                    </span>
-                    <h3 className="text-xl font-black text-purple-950">
-                      Q-learning Support Decision
+                    <h3 className="text-2xl font-black text-slate-900">
+                      Recovery Practice Required
                     </h3>
-                  </div>
-                </div>
 
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Mastery Level
+                    <p className="mt-3 text-sm font-semibold leading-7 text-slate-500">
+                      The current question has been blocked after support. You
+                      cannot answer the same question again now. Complete the
+                      recovery practice to continue the main question sequence.
                     </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.mastery_level || "unknown"}
-                    </p>
-                  </div>
 
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Recommended Difficulty
-                    </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.recommended_next_difficulty || "current"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-purple-500">
-                      Support Action
-                    </p>
-                    <p className="font-black capitalize text-purple-900">
-                      {analysisResult.recommended_support_action?.replace(
-                        /_/g,
-                        " ",
-                      ) || "support"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {stuckData && !inSuggestedMode && (
-              <div className="rounded-[2.5rem] border border-orange-200 bg-orange-50 p-8 shadow-sm shadow-orange-100">
-                <div className="mb-5 flex items-center gap-3 text-orange-800">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70">
-                    <AlertTriangle size={24} />
-                  </div>
-
-                  <div>
-                    <h3 className="text-xl font-black">Stuck Detected</h3>
-                    <p className="text-sm font-semibold text-orange-700">
-                      BKT + behavior state sent to Q-learning support model.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-500">
-                      Concept
-                    </p>
-                    <p className="font-black text-orange-900">
-                      {stuckData.concept}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-500">
-                      Difficulty
-                    </p>
-                    <p className="font-black text-orange-900">
-                      {stuckData.difficulty}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-500">
-                      Attempt
-                    </p>
-                    <p className="font-black text-orange-900">
-                      {stuckData.attemptNo}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-500">
-                      Time Taken
-                    </p>
-                    <p className="font-black text-orange-900">
-                      <Clock size={16} className="mr-1 inline" />
-                      {stuckData.timeTakenSeconds}s
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-white/70 p-4 md:col-span-2">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-500">
-                      Misconception Tag
-                    </p>
-                    <p className="font-black text-orange-900">
-                      {stuckData.misconceptionTag || "Not mapped"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {loadingAnalysis && (
-              <div className="rounded-[2rem] border border-purple-100 bg-purple-50 p-8 text-center shadow-sm">
-                <Sparkles className="mx-auto mb-3 text-purple-600" size={30} />
-                <p className="text-sm font-black uppercase tracking-widest text-purple-700">
-                  Analysing learning pattern...
-                </p>
-              </div>
-            )}
-
-            {roundResult === "pass" && (
-              <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 text-center shadow-sm">
-                <Trophy className="mx-auto mb-3 text-emerald-600" size={36} />
-                <p className="text-sm font-black text-emerald-800">
-                  You got {correctCount}/{suggestedQuestions.length} correct.
-                  Returning to your question...
-                </p>
-              </div>
-            )}
-
-            {roundResult === "fail" && (
-              <div className="rounded-[2.5rem] border border-orange-200 bg-orange-50 p-8 shadow-sm">
-                <div className="mb-2 flex items-center gap-2 text-orange-800">
-                  <AlertTriangle size={22} />
-                  <h3 className="font-black">Mastery Level: Low</h3>
-                </div>
-
-                <p className="text-sm font-semibold leading-7 text-orange-800">
-                  You got {correctCount}/{suggestedQuestions.length} correct.
-                  More support is needed.
-                </p>
-              </div>
-            )}
-
-            {inSuggestedMode &&
-              suggestedQuestions.length > 0 &&
-              !roundResult && (
-                <div className="mx-auto max-w-5xl">
-                  <div className="relative overflow-hidden rounded-[2.5rem] border border-purple-200 bg-white p-6 shadow-xl shadow-purple-100/40 md:p-12">
-                    <div className="absolute left-0 right-0 top-0 h-1.5 bg-purple-500" />
-
-                    <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-purple-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-700">
-                            Suggested Practice
-                          </span>
-
-                          <span className="rounded-lg border border-slate-200/60 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400">
-                            {suggestedIndex + 1} of {suggestedQuestions.length}
-                          </span>
-                        </div>
-
-                        <h2 className="mt-2 text-2xl font-black text-slate-900">
-                          {suggestedQuestions[suggestedIndex].concept}
-                        </h2>
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          Practice Count
+                        </p>
+                        <p className="text-xl font-black text-slate-900">
+                          {suggestedQuestions.length}
+                        </p>
                       </div>
 
-                      <div className="text-left md:text-right">
-                        <span className="rounded-full bg-purple-50 px-4 py-2 text-xs font-black uppercase text-purple-700">
-                          {suggestedQuestions[suggestedIndex].difficulty}
-                        </span>
-
-                        <p className="mt-2 text-xs font-black uppercase tracking-widest text-slate-400">
-                          Score: {correctCount}/{answeredCount} correct
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          Concept
+                        </p>
+                        <p className="truncate text-xl font-black text-slate-900">
+                          {stuckData?.concept || task?.concept || "-"}
                         </p>
                       </div>
                     </div>
 
-                    <p className="mb-8 whitespace-pre-wrap text-xl font-black leading-relaxed text-slate-800">
-                      {suggestedQuestions[suggestedIndex].questionText}
-                    </p>
-
-                    {suggestedQuestions[suggestedIndex].codeSnippet && (
-                      <pre className="mb-8 overflow-x-auto rounded-3xl border border-slate-800 bg-slate-950 p-6 text-sm text-emerald-400 shadow-inner">
-                        <code>
-                          {suggestedQuestions[suggestedIndex].codeSnippet}
-                        </code>
-                      </pre>
-                    )}
-
-                    <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {suggestedQuestions[suggestedIndex].options?.map(
-                        (option) => (
-                          <label
-                            key={option.label}
-                            className={`flex cursor-pointer items-start gap-4 rounded-2xl border-2 p-5 text-left font-bold transition-all ${
-                              suggestedAnswer === option.label
-                                ? "border-purple-600 bg-purple-50 text-purple-600 shadow-md shadow-purple-50"
-                                : "border-slate-100 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="suggested-answer"
-                              value={option.label}
-                              checked={suggestedAnswer === option.label}
-                              onChange={(e) =>
-                                setSuggestedAnswer(e.target.value)
-                              }
-                              className="sr-only"
-                            />
-
-                            <span
-                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                                suggestedAnswer === option.label
-                                  ? "bg-purple-600 text-white"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {option.label}
-                            </span>
-
-                            <span className="pt-1 text-sm font-medium leading-relaxed">
-                              {option.text}
-                            </span>
-                          </label>
-                        ),
-                      )}
-                    </div>
-
-                    {suggestedMessage && (
-                      <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-5 text-sm font-black text-slate-700">
-                        {suggestedMessage}
-                      </div>
-                    )}
-
-                    <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-100 pt-8 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          resetTaskUi();
-                          handleLoadCurrentTask();
-                        }}
-                        className="w-full rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-500 transition-all hover:bg-slate-50 sm:w-auto"
-                      >
-                        Skip & Return to Module
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleSuggestedSubmit}
-                        disabled={loading}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-10 py-5 font-black text-white shadow-lg shadow-purple-100 transition-all hover:bg-purple-700 disabled:opacity-60 sm:w-auto"
-                      >
-                        {loading ? "Checking..." : "Submit Answer"}
-                        <ChevronRight size={20} />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={startRecoveryPractice}
+                      className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-6 py-5 text-sm font-black text-white shadow-lg shadow-purple-100 transition-all hover:bg-purple-700"
+                    >
+                      <CheckCircle2 size={20} />
+                      Start Recovery Practice
+                    </button>
                   </div>
                 </div>
               )}

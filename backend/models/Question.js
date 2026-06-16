@@ -101,6 +101,7 @@ const questionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    
 
     // Lecturer/admin initial difficulty
     difficulty: {
