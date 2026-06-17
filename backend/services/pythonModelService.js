@@ -2,7 +2,7 @@ const axios = require("axios");
 
 const PYTHON_MODEL_URL =
   process.env.PYTHON_MODEL_URL || "http://localhost:8000";
-
+console.log("Python URL:", PYTHON_MODEL_URL);
 const analyzeStudentInteraction = async (payload) => {
   try {
     const response = await axios.post(
