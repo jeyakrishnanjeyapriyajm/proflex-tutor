@@ -3,7 +3,6 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 
-
 dotenv.config();
 
 connectDB();
@@ -17,7 +16,6 @@ const allowedOrigins = [
   "https://proflex-tutor.vercel.app",
   "https://proflex-tutor-akfyxc71l-jeyas-projects-999d4ec8.vercel.app",
 ];
-const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -51,8 +49,6 @@ app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/user", require("./modules/user_routes"));
 app.use("/api/task-giving", require("./routes/taskGivingRoutes"));
-app.use("/api/model", require("./routes/modelRewardRoutes"));
-app.use("/api/analytics", require("./routes/studentAnalyticsRoutes"));
 
 // Optional: only keep this if you really use difficultyRoutes
 // app.use("/api/difficulty", require("./routes/difficultyRoutes"));

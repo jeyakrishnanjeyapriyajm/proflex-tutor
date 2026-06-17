@@ -5,7 +5,6 @@ import curriculumReducer from "../features/curriculum/curriculumSlice";
 import assessmentReducer from "../features/assessment/assessmentSlice";
 import taskGivingReducer from "../features/taskGiving/taskGivingSlice";
 import adminReducer from "../features/admin/adminSlice";
-import studentAnalyticsReducer from "../features/studentAnalytics/studentAnalyticsSlice";
 
 export const store = configureStore({
   reducer: {
@@ -14,7 +13,6 @@ export const store = configureStore({
     assessment: assessmentReducer,
     taskGiving: taskGivingReducer,
     admin: adminReducer,
-    studentAnalytics: studentAnalyticsReducer,
   },
 });
 
