@@ -3,13 +3,10 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-const taskGivingRoutes = require("./routes/taskGivingRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const taskGivingRoutes = require("./routes/taskGivingRoutes");
 const modelRewardRoutes = require("./routes/modelRewardRoutes");
 const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
-
-// Only keep this if this file exists and exports router correctly
-// const difficultyRoutes = require("./routes/difficultyRoutes");
 
 const app = express();
 
@@ -39,7 +36,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// IMPORTANT:
 // Do NOT add this:
 // app.options("*", cors(corsOptions));
 
@@ -52,13 +48,12 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/model", modelRewardRoutes);
-app.use("/api/student/analytics", studentAnalyticsRoutes);
 
-// Only enable if difficultyRoutes is correct
-// app.use("/api/difficulty", difficultyRoutes);
+// Student analytics API
+app.use("/api/student/analytics", studentAnalyticsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
