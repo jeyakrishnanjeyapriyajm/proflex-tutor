@@ -1,67 +1,10 @@
-const express = require("express");
-const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
+const app = require("./app");
 
 dotenv.config();
+
 connectDB();
-
-const app = express();
-
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://proflex-tutor.vercel.app",
-  "https://proflex-tutor-akfyxc71l-jeyas-projects-999d4ec8.vercel.app",
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.get("/", (req, res) => {
-  res.send("ProgFlex API is running");
-});
-
-// Routes
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/dashboard", require("./routes/dashboardRoutes"));
-app.use("/api/admin", require("./routes/adminRoutes"));
-app.use("/api/user", require("./modules/user_routes"));
-app.use("/api/task-giving", require("./routes/taskGivingRoutes"));
-app.use("/api/model", require("./routes/modelRewardRoutes"));
-
-// Student analytics route
-app.use("/api/student/analytics", require("./routes/studentAnalyticsRoutes"));
-
-// Optional difficulty route
-// app.use("/api/difficulty", require("./routes/difficultyRoutes"));
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-  });
-});
 
 const PORT = process.env.PORT || 5000;
 
