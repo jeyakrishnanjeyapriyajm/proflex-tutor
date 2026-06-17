@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const modelRewardRoutes = require("./routes/modelRewardRoutes");
-const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
 
 const app = express();
 
@@ -21,7 +20,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
-
 app.use("/api/difficulty", difficultyRoutes);
 
 
