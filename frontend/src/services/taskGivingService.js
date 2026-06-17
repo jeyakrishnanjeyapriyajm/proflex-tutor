@@ -37,8 +37,10 @@ export const submitModelReward = async (payload) => {
 
 export const getCompletedModuleReview = async (moduleId) => {
   const response = await API.get(
-    `/task-giving/modules/${moduleId}/completed-review`
+    `/task-giving/modules/${moduleId}/review`
   );
+
+
 
   return response.data;
 };

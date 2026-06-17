@@ -164,8 +164,8 @@ const StudentTaskGivingPanel = () => {
     setSelectedModule(null);
     setStartedAt(null);
     setElapsedSeconds(0);
-    setCompletedReview(null);
     resetTaskUi();
+    setCompletedReview(null);
   };
 
   const loadModules = async () => {
@@ -185,17 +185,25 @@ const StudentTaskGivingPanel = () => {
     }
   };
 
-  const applyLoadedTask = (data) => {
+  const applyLoadedTask = async (data, moduleId) => {
     setProgress(data.progress || null);
 
     if (data.completed) {
       setTask(null);
       setStartedAt(null);
       setElapsedSeconds(0);
+      setQuestionLocked(false);
+      setQuestionLockReason("");
+      setRecoveryPopupOpen(false);
+      setInSuggestedMode(false);
+
+      await loadCompletedReview(moduleId);
+
       showMessage(
-        `Module completed. Score: ${data.score || data.progress?.score || 0}`,
+        `Module completed. Score: ${data.score || data.progress?.score || 0}. Review your answers below.`,
         "success",
       );
+
       return;
     }
 
@@ -211,6 +219,7 @@ const StudentTaskGivingPanel = () => {
       return;
     }
 
+    setCompletedReview(null);
     setTask(data.question);
     setSelectedAnswer("");
     setQuestionLocked(false);
@@ -231,7 +240,7 @@ const StudentTaskGivingPanel = () => {
       setProgress(startData.progress || null);
 
       const data = await getCurrentTask(module._id);
-      applyLoadedTask(data);
+      await applyLoadedTask(data, module._id);
     } catch (error) {
       showMessage(
         error.response?.data?.message || "Could not start module.",
@@ -250,7 +259,7 @@ const StudentTaskGivingPanel = () => {
       resetTaskUi();
 
       const data = await getCurrentTask(selectedModule._id);
-      applyLoadedTask(data);
+      await applyLoadedTask(data, selectedModule._id);
     } catch (error) {
       showMessage(
         error.response?.data?.message || "Could not load task.",
