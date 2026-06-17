@@ -1819,7 +1819,7 @@ const retryModuleAssessment = async (req, res) => {
   }
 };
 
-// Task giving review 
+
 const getCompletedModuleReview = async (req, res) => {
   try {
     const studentId = getStudentId(req);
@@ -1931,7 +1931,6 @@ const getCompletedModuleReview = async (req, res) => {
       percentage: progress.percentage,
       totalQuestions: progress.totalQuestions,
       overallMasteryLevel: progress.overallMasteryLevel,
-      progress,
       reviewQuestions,
     });
   } catch (error) {

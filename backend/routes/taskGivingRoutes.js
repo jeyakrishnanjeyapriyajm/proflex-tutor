@@ -17,7 +17,10 @@ router.get("/modules", protect, getLearningModules);
 router.post("/modules/:moduleId/start", protect, startModule);
 router.get("/modules/:moduleId/current-task", protect, getCurrentTask);
 router.post("/submit", protect, submitTaskAnswer);
+// ✅ ADD THIS
+router.get("/modules/:moduleId/review", protect, getCompletedModuleReview);
 router.post("/suggested-round-result", protect, handleSuggestedRoundResult);
 router.post("/:moduleId/retry-assessment", protect, retryModuleAssessment);
-router.get("/modules/:moduleId/completed-review", protect, getCompletedModuleReview);
+
+
 module.exports = router;
