@@ -27,4 +27,8 @@ export const getStudentAnalytics = async () => {
   );
 
   return response.data;
+
+
+  
 };
+
