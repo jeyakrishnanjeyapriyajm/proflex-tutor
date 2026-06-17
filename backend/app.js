@@ -8,8 +8,8 @@ const adminRoutes = require("./routes/adminRoutes");
 const modelRewardRoutes = require("./routes/modelRewardRoutes");
 const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
 
-// Only keep this if the file exists
-const difficultyRoutes = require("./routes/difficultyRoutes");
+// Only enable this if backend/routes/difficultyRoutes.js exists and exports router correctly
+// const difficultyRoutes = require("./routes/difficultyRoutes");
 
 const app = express();
 
@@ -50,11 +50,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/difficulty", difficultyRoutes);
 app.use("/api/model", modelRewardRoutes);
-
-// This is the important analytics route
 app.use("/api/student/analytics", studentAnalyticsRoutes);
+
+// Only uncomment if difficultyRoutes is correct
+// app.use("/api/difficulty", difficultyRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
