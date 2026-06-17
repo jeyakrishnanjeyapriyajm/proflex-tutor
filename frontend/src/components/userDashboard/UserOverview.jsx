@@ -24,8 +24,6 @@ const UserOverview = ({ data }) => {
         setDashboard(response.dashboard || null);
       } catch (error) {
         console.error("LOAD STUDENT DASHBOARD SUMMARY ERROR:", error);
-
-        // fallback to existing passed data if backend fails
         setDashboard(data?.dashboard || null);
       } finally {
         setLoading(false);
@@ -48,19 +46,14 @@ const UserOverview = ({ data }) => {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="space-y-8 lg:col-span-8">
           <ProgressSummary dashboard={dashboard} />
-
           <ConceptMastery items={dashboard?.conceptMastery || []} />
-
           <RecentActivity items={dashboard?.recentActivities || []} />
         </div>
 
         <div className="space-y-8 lg:col-span-4">
           <ResumeLearningCard data={dashboard?.resumeLearning || null} />
-
           <LatestResources items={dashboard?.resources || []} />
-
           <RecentMessages items={dashboard?.messages || []} />
-
           <Achievements items={dashboard?.achievements || []} />
         </div>
       </div>
