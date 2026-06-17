@@ -8,7 +8,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const modelRewardRoutes = require("./routes/modelRewardRoutes");
 const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
 
-// Only enable this if backend/routes/difficultyRoutes.js exists and exports router correctly
+// Only keep this if this file exists and exports router correctly
 // const difficultyRoutes = require("./routes/difficultyRoutes");
 
 const app = express();
@@ -20,24 +20,28 @@ const allowedOrigins = [
   "https://proflex-tutor-akfyxc71l-jeyas-projects-999d4ec8.vercel.app",
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
 
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// IMPORTANT:
+// Do NOT add this:
+// app.options("*", cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -53,7 +57,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/model", modelRewardRoutes);
 app.use("/api/student/analytics", studentAnalyticsRoutes);
 
-// Only uncomment if difficultyRoutes is correct
+// Only enable if difficultyRoutes is correct
 // app.use("/api/difficulty", difficultyRoutes);
 
 app.use((req, res) => {
