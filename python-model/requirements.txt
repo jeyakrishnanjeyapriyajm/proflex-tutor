@@ -2,5 +2,3 @@ fastapi
 uvicorn
 pydantic
 python-dotenv
-pyngrok
-nest-asyncio
