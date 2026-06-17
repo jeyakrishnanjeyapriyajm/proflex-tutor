@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
+print("Starting application...")
+
 from models.bkt_model import BKTModel
 from models.ql_agent import QLearningAgent
 from models.difficulty_analyzer import (
@@ -11,11 +13,6 @@ from models.difficulty_analyzer import (
 )
 
 app = FastAPI()
-@app.get("/")
-def root():
-    return {
-        "message": "Python Model Running"
-    }
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,14 +21,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-bkt = BKTModel()
-support_rl = QLearningAgent(SUPPORT_ACTIONS)
+# =========================
+# ROOT ROUTE
+# =========================
 
-analyzer = DifficultyAnalysisWithBKTRL(
-    bkt_model=bkt,
-    support_rl_agent=support_rl,
-)
+@app.get("/")
+def root():
+    return {
+        "message": "Adaptive Tutor Python Model Running"
+    }
 
+# =========================
+# HEALTH ROUTE
+# =========================
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
+
+# =========================
+# LOAD MODELS
+# =========================
+
+try:
+    print("Loading BKT Model...")
+    bkt = BKTModel()
+
+    print("Loading Q-Learning Agent...")
+    support_rl = QLearningAgent(SUPPORT_ACTIONS)
+
+    print("Loading Difficulty Analyzer...")
+    analyzer = DifficultyAnalysisWithBKTRL(
+        bkt_model=bkt,
+        support_rl_agent=support_rl,
+    )
+
+    print("All models loaded successfully.")
+
+except Exception as e:
+    print("STARTUP ERROR:")
+    print(str(e))
+    raise e
+
+# =========================
+# REQUEST MODELS
+# =========================
 
 class InteractionPayload(BaseModel):
     student_id: str
@@ -66,8 +102,6 @@ class InteractionPayload(BaseModel):
 
     previous_mastery_probability: Optional[float] = None
 
-    # Backend sends this so the Q-agent can decide the recovery count
-    # without asking for more questions than MongoDB has available.
     available_recovery_counts: Optional[Dict[str, int]] = None
 
 
@@ -77,25 +111,36 @@ class RewardPayload(BaseModel):
     reward: float
     next_state: Optional[List[Any]] = None
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
+# =========================
+# ANALYZE ENDPOINT
+# =========================
 
 @app.post("/analyze")
 def analyze(payload: InteractionPayload):
-    result = analyzer.analyze(payload.dict())
-    return result
+    try:
+        result = analyzer.analyze(payload.dict())
+        return result
 
+    except Exception as e:
+        print("ANALYZE ERROR:", str(e))
+        raise
+
+# =========================
+# REWARD ENDPOINT
+# =========================
 
 @app.post("/reward")
 def reward(payload: RewardPayload):
-    result = analyzer.update_reward(
-        q_state=payload.q_state,
-        q_action=payload.q_action,
-        reward=payload.reward,
-        next_state=payload.next_state,
-    )
+    try:
+        result = analyzer.update_reward(
+            q_state=payload.q_state,
+            q_action=payload.q_action,
+            reward=payload.reward,
+            next_state=payload.next_state,
+        )
 
-    return result
+        return result
+
+    except Exception as e:
+        print("REWARD ERROR:", str(e))
+        raise
