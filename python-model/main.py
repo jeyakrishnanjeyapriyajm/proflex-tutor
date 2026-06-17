@@ -11,6 +11,11 @@ from models.difficulty_analyzer import (
 )
 
 app = FastAPI()
+@app.get("/")
+def root():
+    return {
+        "message": "Python Model Running"
+    }
 
 app.add_middleware(
     CORSMiddleware,
