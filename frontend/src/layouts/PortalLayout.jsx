@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
   X,
@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Settings,
   User,
+  LogOut,
 } from "lucide-react";
 
 const iconMap = {
@@ -32,6 +33,7 @@ const PortalLayout = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path) => {
     if (!path) return false;
@@ -41,6 +43,18 @@ const PortalLayout = ({
     }
 
     return location.pathname.startsWith(path);
+  };
+
+  const handleLogout = () => {
+    // Clear saved authentication data
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("role");
+
+    sessionStorage.clear();
+
+    // Redirect to login page
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -88,6 +102,16 @@ const PortalLayout = ({
                   </Link>
                 );
               })}
+
+              {/* Mobile Logout Button */}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 rounded-xl bg-red-50 px-4 py-3 text-left text-sm font-bold text-red-600 transition hover:bg-red-100"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
             </div>
           </div>
         )}
@@ -95,37 +119,51 @@ const PortalLayout = ({
 
       <div className="flex">
         {/* Desktop Sidebar */}
-        <aside className="hidden min-h-screen w-72 shrink-0 border-r border-slate-100 bg-white p-6 lg:block">
-          <div className="mb-8">
-            <h1 className="text-xl font-black text-slate-900">{title}</h1>
-            {subtitle && (
-              <p className="mt-1 text-sm font-semibold text-slate-400">
-                {subtitle}
-              </p>
-            )}
+        <aside className="hidden min-h-screen w-72 shrink-0 border-r border-slate-100 bg-white p-6 lg:flex lg:flex-col">
+          <div>
+            <div className="mb-8">
+              <h1 className="text-xl font-black text-slate-900">{title}</h1>
+              {subtitle && (
+                <p className="mt-1 text-sm font-semibold text-slate-400">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+
+            <nav className="space-y-2">
+              {tabs.map((tab) => {
+                const Icon = iconMap[tab.label] || LayoutDashboard;
+                const active = isActive(tab.to || tab.path);
+
+                return (
+                  <Link
+                    key={tab.to || tab.path || tab.label}
+                    to={tab.to || tab.path}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                      active
+                        ? "bg-sky-600 text-white shadow-lg shadow-sky-100"
+                        : "text-slate-600 hover:bg-sky-50 hover:text-sky-700"
+                    }`}
+                  >
+                    <Icon size={18} />
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
 
-          <nav className="space-y-2">
-            {tabs.map((tab) => {
-              const Icon = iconMap[tab.label] || LayoutDashboard;
-              const active = isActive(tab.to || tab.path);
-
-              return (
-                <Link
-                  key={tab.to || tab.path || tab.label}
-                  to={tab.to || tab.path}
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                    active
-                      ? "bg-sky-600 text-white shadow-lg shadow-sky-100"
-                      : "text-slate-600 hover:bg-sky-50 hover:text-sky-700"
-                  }`}
-                >
-                  <Icon size={18} />
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {/* Desktop Logout Button */}
+          <div className="mt-auto border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50"
+            >
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
