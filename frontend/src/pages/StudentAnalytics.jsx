@@ -13,7 +13,6 @@ import {
   Target,
   TrendingUp,
   Trophy,
-  Users,
   Zap,
 } from "lucide-react";
 
@@ -21,9 +20,9 @@ import PortalLayout from "../layouts/PortalLayout";
 import { studentTabs } from "../data/portalTabs";
 
 import {
-  getAnalysisOverview,
-  getModuleAnalysis,
-} from "../services/analysisService";
+  getMyAnalysisOverview,
+  getMyModuleAnalysis,
+} from "../services/studentAnalysisService";
 
 const getStatusStyle = (status) => {
   if (status === "completed") return "bg-emerald-50 text-emerald-700";
@@ -111,7 +110,7 @@ const StudentAnalytics = () => {
       setLoadingOverview(true);
       setError("");
 
-      const data = await getAnalysisOverview();
+      const data = await getMyAnalysisOverview();
       const modules = data.overview || [];
 
       setOverview(modules);
@@ -120,7 +119,9 @@ const StudentAnalytics = () => {
         setSelectedModuleId(modules[0].moduleId);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Could not load analytics list.");
+      setError(
+        err.response?.data?.message || "Could not load your analytics list.",
+      );
     } finally {
       setLoadingOverview(false);
     }
@@ -133,11 +134,11 @@ const StudentAnalytics = () => {
       setLoadingAnalysis(true);
       setError("");
 
-      const data = await getModuleAnalysis(moduleId);
+      const data = await getMyModuleAnalysis(moduleId);
       setAnalysis(data);
     } catch (err) {
       setError(
-        err.response?.data?.message || "Could not load module analysis.",
+        err.response?.data?.message || "Could not load your module analysis.",
       );
       setAnalysis(null);
     } finally {
@@ -156,18 +157,7 @@ const StudentAnalytics = () => {
   }, [selectedModuleId]);
 
   const moduleSummary = analysis?.moduleSummary || {};
-  const difficultySummary = analysis?.difficultySummary || {};
   const bktSummary = analysis?.bktSummary || {};
-  const stuckSummary = analysis?.stuckSummary || {};
-
-  const totalStudents = moduleSummary.totalStudents || 0;
-  const overallAccuracy = moduleSummary.overallAccuracy || 0;
-  const totalQuestions = moduleSummary.totalQuestions || 0;
-  const totalAttempts = moduleSummary.totalAttempts || 0;
-
-  const completedStudents = moduleSummary.completedStudents || 0;
-  const completionRate =
-    totalStudents > 0 ? (completedStudents / totalStudents) * 100 : 0;
 
   return (
     <PortalLayout
@@ -180,14 +170,14 @@ const StudentAnalytics = () => {
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-bold text-sky-600">
               <BarChart3 size={16} />
-              Learning Performance
+              My Learning Performance
             </div>
 
-            <h2 className="text-3xl font-bold text-slate-900">Analytics</h2>
+            <h2 className="text-3xl font-bold text-slate-900">My Analytics</h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              Track module performance, difficulty analysis, BKT mastery, stuck
-              detection, concept-level mastery, and Q-learning decisions.
+              View your own module performance, concept mastery, stuck events,
+              BKT mastery progression, and AI support decisions.
             </p>
           </div>
 
@@ -201,7 +191,7 @@ const StudentAnalytics = () => {
 
               {overview.map((module) => (
                 <option key={module.moduleId} value={module.moduleId}>
-                  {module.moduleName} ({module.questionCount} Questions)
+                  {module.moduleName} ({module.status})
                 </option>
               ))}
             </select>
@@ -231,44 +221,48 @@ const StudentAnalytics = () => {
         {(loadingOverview || loadingAnalysis) && (
           <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-sm">
             <p className="text-sm font-bold text-slate-500">
-              Loading analytics...
+              Loading your analytics...
             </p>
           </div>
         )}
 
         {!loadingOverview && !loadingAnalysis && !analysis && (
-          <EmptyBox message="No analytics data available yet. Complete some module attempts first." />
+          <EmptyBox message="No personal analytics data available yet. Complete a module attempt first." />
         )}
 
         {analysis && !loadingAnalysis && (
           <>
             <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                icon={Users}
-                label="Students"
-                value={totalStudents}
-                helper="Students with attempts or progress records."
-              />
-
-              <StatCard
                 icon={BookOpen}
-                label="Questions"
-                value={totalQuestions}
+                label="Module Questions"
+                value={moduleSummary.totalQuestions || 0}
                 helper="Active questions in this module."
               />
 
               <StatCard
+                icon={Activity}
+                label="My Attempts"
+                value={moduleSummary.totalAttempts || 0}
+                helper={`${moduleSummary.correctAttempts || 0} correct, ${
+                  moduleSummary.wrongAttempts || 0
+                } wrong.`}
+              />
+
+              <StatCard
                 icon={TrendingUp}
-                label="Overall Accuracy"
-                value={formatPercent(overallAccuracy)}
-                helper={`${totalAttempts} total attempts.`}
+                label="My Accuracy"
+                value={formatPercent(moduleSummary.accuracyPercentage)}
+                helper="Based on your submitted answers."
               />
 
               <StatCard
                 icon={Trophy}
-                label="Completion Rate"
-                value={formatPercent(completionRate)}
-                helper={`${completedStudents}/${totalStudents} students completed.`}
+                label="Module Status"
+                value={moduleSummary.status || "not_started"}
+                helper={`Score: ${moduleSummary.score || 0}/${
+                  moduleSummary.totalModuleQuestions || 0
+                }`}
               />
             </section>
 
@@ -278,107 +272,135 @@ const StudentAnalytics = () => {
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <h3 className="text-xl font-black text-slate-900">
-                        Student Performance by Module
+                        My Concept Mastery
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        Attempts, accuracy, stuck events, hint usage, and module
-                        status.
+                        Your mastery level by C programming concept.
                       </p>
                     </div>
 
-                    <Activity className="text-sky-600" size={24} />
+                    <Award className="text-sky-600" size={24} />
+                  </div>
+
+                  <div className="space-y-5">
+                    {analysis.conceptMastery?.length === 0 && (
+                      <EmptyBox message="No concept mastery records yet." />
+                    )}
+
+                    {analysis.conceptMastery?.map((item) => (
+                      <div key={item.concept}>
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-900">
+                              {item.concept}
+                            </p>
+                            <p className="text-xs font-semibold text-slate-400">
+                              {item.attempts} attempts •{" "}
+                              {formatPercent(item.accuracyPercentage)} accuracy
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${getMasteryStyle(
+                                item.masteryLevel,
+                              )}`}
+                            >
+                              {item.masteryLevel}
+                            </span>
+
+                            <span className="text-sm font-black text-sky-600">
+                              {formatPercent(item.averageMasteryPercentage)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <ProgressBar
+                          value={item.averageMasteryPercentage}
+                          color="bg-emerald-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-sm">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">
+                        My Question Performance
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Your performance for each question in the selected
+                        module.
+                      </p>
+                    </div>
+
+                    <Target className="text-sky-600" size={24} />
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-left">
+                    <table className="w-full min-w-[850px] text-left">
                       <thead>
                         <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          <th className="pb-4">Student</th>
+                          <th className="pb-4">Q No</th>
+                          <th className="pb-4">Concept</th>
+                          <th className="pb-4">Difficulty</th>
                           <th className="pb-4">Attempts</th>
-                          <th className="pb-4">Correct</th>
-                          <th className="pb-4">Wrong</th>
                           <th className="pb-4">Accuracy</th>
-                          <th className="pb-4">Stuck</th>
                           <th className="pb-4">Hints</th>
-                          <th className="pb-4">Avg Time</th>
-                          <th className="pb-4">Status</th>
+                          <th className="pb-4">Stuck</th>
+                          <th className="pb-4">Last Result</th>
                         </tr>
                       </thead>
 
                       <tbody>
-                        {analysis.studentPerformance?.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan="9"
-                              className="py-8 text-center text-sm font-bold text-slate-400"
-                            >
-                              No student performance records yet.
-                            </td>
-                          </tr>
-                        )}
-
-                        {analysis.studentPerformance?.map((student) => (
+                        {analysis.questionPerformance?.map((question) => (
                           <tr
-                            key={student.studentId}
+                            key={question.questionId}
                             className="border-b border-slate-50 text-sm"
                           >
-                            <td className="py-4 font-bold text-slate-900">
-                              {student.studentName}
-                              <p className="text-xs font-semibold text-slate-400">
-                                {student.email || "No email"}
-                              </p>
+                            <td className="py-4 font-black text-slate-900">
+                              Q{question.orderNo}
                             </td>
 
                             <td className="py-4 font-bold text-slate-700">
-                              {student.totalAttempts}
-                            </td>
-
-                            <td className="py-4 font-bold text-emerald-600">
-                              {student.correctAttempts}
-                            </td>
-
-                            <td className="py-4 font-bold text-rose-600">
-                              {student.wrongAttempts}
-                            </td>
-
-                            <td className="py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
-                                  <div
-                                    className="h-full rounded-full bg-emerald-500"
-                                    style={{
-                                      width: `${Math.min(
-                                        100,
-                                        Number(student.accuracyPercentage) || 0,
-                                      )}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span className="text-xs font-black text-slate-500">
-                                  {formatPercent(student.accuracyPercentage)}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="py-4 font-bold text-orange-600">
-                              {student.stuckEvents}
-                            </td>
-
-                            <td className="py-4 font-bold text-slate-600">
-                              {student.hintUsedCount}
-                            </td>
-
-                            <td className="py-4 font-semibold text-slate-500">
-                              {formatNumber(student.averageTimeSeconds)}s
+                              {question.concept}
                             </td>
 
                             <td className="py-4">
                               <span
-                                className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusStyle(
-                                  student.moduleStatus,
+                                className={`rounded-full px-3 py-1 text-xs font-bold ${getDifficultyStyle(
+                                  question.lecturerDifficulty,
                                 )}`}
                               >
-                                {student.moduleStatus}
+                                {question.lecturerDifficulty}
+                              </span>
+                            </td>
+
+                            <td className="py-4">{question.totalAttempts}</td>
+
+                            <td className="py-4">
+                              {formatPercent(question.accuracyPercentage)}
+                            </td>
+
+                            <td className="py-4">{question.hintUsedCount}</td>
+
+                            <td className="py-4 text-orange-600">
+                              {question.stuckEvents}
+                            </td>
+
+                            <td className="py-4">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                  question.lastResult === "correct"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : question.lastResult === "wrong"
+                                      ? "bg-rose-50 text-rose-700"
+                                      : "bg-slate-50 text-slate-500"
+                                }`}
+                              >
+                                {question.lastResult}
                               </span>
                             </td>
                           </tr>
@@ -392,205 +414,87 @@ const StudentAnalytics = () => {
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <h3 className="text-xl font-black text-slate-900">
-                        Question Difficulty Index Analysis
+                        My Recent Attempts
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        Difficulty Index = correct students / total students
-                        attempted.
+                        Latest attempts from your adaptive task-giving flow.
                       </p>
                     </div>
 
-                    <Target className="text-sky-600" size={24} />
-                  </div>
-
-                  <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-                    <div className="rounded-2xl bg-emerald-50 p-5">
-                      <p className="text-2xl font-black text-emerald-700">
-                        {difficultySummary.easy || 0}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-emerald-600">
-                        Easy
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-amber-50 p-5">
-                      <p className="text-2xl font-black text-amber-700">
-                        {difficultySummary.medium || 0}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-amber-600">
-                        Medium
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-rose-50 p-5">
-                      <p className="text-2xl font-black text-rose-700">
-                        {difficultySummary.hard || 0}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-rose-600">
-                        Hard
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-sky-50 p-5">
-                      <p className="text-2xl font-black text-sky-700">
-                        {formatPercent(difficultySummary.matchPercentage)}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-sky-600">
-                        Lecturer Match
-                      </p>
-                    </div>
+                    <Clock className="text-sky-600" size={24} />
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] text-left">
+                    <table className="w-full min-w-[800px] text-left">
                       <thead>
                         <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
                           <th className="pb-4">Q No</th>
                           <th className="pb-4">Concept</th>
-                          <th className="pb-4">Correct</th>
-                          <th className="pb-4">Total</th>
-                          <th className="pb-4">DI</th>
-                          <th className="pb-4">Dynamic</th>
-                          <th className="pb-4">Lecturer</th>
-                          <th className="pb-4">Match</th>
+                          <th className="pb-4">Difficulty</th>
+                          <th className="pb-4">Attempt No</th>
+                          <th className="pb-4">Time</th>
+                          <th className="pb-4">Hint</th>
+                          <th className="pb-4">Stuck</th>
+                          <th className="pb-4">Result</th>
                         </tr>
                       </thead>
 
                       <tbody>
-                        {analysis.questionDifficultyAnalysis?.map(
-                          (question) => (
-                            <tr
-                              key={question.questionId}
-                              className="border-b border-slate-50 text-sm"
+                        {analysis.recentAttempts?.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan="8"
+                              className="py-8 text-center text-sm font-bold text-slate-400"
                             >
-                              <td className="py-4 font-black text-slate-900">
-                                Q{question.orderNo}
-                              </td>
-
-                              <td className="py-4 font-bold text-slate-700">
-                                {question.concept}
-                              </td>
-
-                              <td className="py-4">
-                                {question.correctStudents}
-                              </td>
-                              <td className="py-4">{question.totalStudents}</td>
-
-                              <td className="py-4 font-black text-slate-700">
-                                {formatNumber(question.difficultyIndex)}
-                              </td>
-
-                              <td className="py-4">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-bold ${getDifficultyStyle(
-                                    question.dynamicLevel,
-                                  )}`}
-                                >
-                                  {question.dynamicLevel}
-                                </span>
-                              </td>
-
-                              <td className="py-4">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-bold ${getDifficultyStyle(
-                                    question.lecturerDifficulty,
-                                  )}`}
-                                >
-                                  {question.lecturerDifficulty}
-                                </span>
-                              </td>
-
-                              <td className="py-4">
-                                {question.matchedLecturerLabel ? (
-                                  <span className="text-xs font-black text-emerald-600">
-                                    Yes
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-black text-rose-600">
-                                    No
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ),
+                              No attempts yet.
+                            </td>
+                          </tr>
                         )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
 
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-sm">
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-black text-slate-900">
-                        BKT Mastery Progression
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Initial and final mastery probability from model
-                        decision logs.
-                      </p>
-                    </div>
-
-                    <BrainCircuit className="text-sky-600" size={24} />
-                  </div>
-
-                  <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div className="rounded-2xl bg-slate-50 p-5">
-                      <p className="text-2xl font-black text-slate-900">
-                        {formatNumber(bktSummary.averageInitialMastery, 4)}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                        Avg Initial
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 p-5">
-                      <p className="text-2xl font-black text-slate-900">
-                        {formatNumber(bktSummary.averageFinalMastery, 4)}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                        Avg Final
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-emerald-50 p-5">
-                      <p className="text-2xl font-black text-emerald-700">
-                        {formatNumber(bktSummary.averageImprovement, 4)}
-                      </p>
-                      <p className="text-xs font-black uppercase tracking-widest text-emerald-600">
-                        Improvement
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[600px] text-left">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          <th className="pb-4">Student</th>
-                          <th className="pb-4">Initial</th>
-                          <th className="pb-4">Final</th>
-                          <th className="pb-4">Improvement</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {analysis.bktMasteryProgression?.map((student) => (
+                        {analysis.recentAttempts?.map((attempt) => (
                           <tr
-                            key={student.studentId}
+                            key={attempt.attemptId}
                             className="border-b border-slate-50 text-sm"
                           >
-                            <td className="py-4 font-bold text-slate-900">
-                              {student.studentName}
+                            <td className="py-4 font-black text-slate-900">
+                              Q{attempt.questionNo}
+                            </td>
+
+                            <td className="py-4 font-bold text-slate-700">
+                              {attempt.concept}
+                            </td>
+
+                            <td className="py-4">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-bold ${getDifficultyStyle(
+                                  attempt.difficulty,
+                                )}`}
+                              >
+                                {attempt.difficulty}
+                              </span>
+                            </td>
+
+                            <td className="py-4">{attempt.attemptNo}</td>
+                            <td className="py-4">
+                              {attempt.timeTakenSeconds}s
                             </td>
                             <td className="py-4">
-                              {formatNumber(student.initialMastery, 4)}
+                              {attempt.hintUsed ? "Yes" : "No"}
                             </td>
                             <td className="py-4">
-                              {formatNumber(student.finalMastery, 4)}
+                              {attempt.isStuck ? "Yes" : "No"}
                             </td>
-                            <td className="py-4 font-black text-emerald-600">
-                              {formatNumber(student.improvement, 4)}
+
+                            <td className="py-4">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                  attempt.isCorrect
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-rose-50 text-rose-700"
+                                }`}
+                              >
+                                {attempt.isCorrect ? "Correct" : "Wrong"}
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -604,9 +508,11 @@ const StudentAnalytics = () => {
                 <div className="rounded-[2rem] bg-slate-900 p-7 text-white shadow-xl shadow-slate-200">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
-                      <h3 className="text-xl font-black">Learning Summary</h3>
+                      <h3 className="text-xl font-black">
+                        My Learning Summary
+                      </h3>
                       <p className="mt-1 text-sm text-slate-400">
-                        Module-level student progress.
+                        Your progress in this module.
                       </p>
                     </div>
 
@@ -620,7 +526,7 @@ const StudentAnalytics = () => {
                           Accuracy
                         </span>
                         <span className="font-black text-sky-300">
-                          {formatPercent(overallAccuracy)}
+                          {formatPercent(moduleSummary.accuracyPercentage)}
                         </span>
                       </div>
 
@@ -628,7 +534,10 @@ const StudentAnalytics = () => {
                         <div
                           className="h-full rounded-full bg-sky-400"
                           style={{
-                            width: `${Math.min(100, overallAccuracy)}%`,
+                            width: `${Math.min(
+                              100,
+                              moduleSummary.accuracyPercentage || 0,
+                            )}%`,
                           }}
                         />
                       </div>
@@ -638,7 +547,7 @@ const StudentAnalytics = () => {
                       <div className="rounded-2xl bg-white/5 p-4">
                         <Flame className="mb-3 text-orange-400" size={22} />
                         <p className="text-2xl font-black">
-                          {stuckSummary.totalStuckEvents || 0}
+                          {moduleSummary.stuckEvents || 0}
                         </p>
                         <p className="text-xs font-bold text-slate-400">
                           Stuck Events
@@ -648,10 +557,10 @@ const StudentAnalytics = () => {
                       <div className="rounded-2xl bg-white/5 p-4">
                         <Zap className="mb-3 text-yellow-400" size={22} />
                         <p className="text-2xl font-black">
-                          {stuckSummary.interventionsTriggered || 0}
+                          {moduleSummary.hintUsedCount || 0}
                         </p>
                         <p className="text-xs font-bold text-slate-400">
-                          Interventions
+                          Hints Used
                         </p>
                       </div>
                     </div>
@@ -660,53 +569,58 @@ const StudentAnalytics = () => {
 
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-sm">
                   <h3 className="mb-6 text-xl font-black text-slate-900">
-                    Concept Mastery
+                    BKT Mastery
                   </h3>
 
-                  <div className="space-y-5">
-                    {analysis.conceptMastery?.length === 0 && (
-                      <EmptyBox message="No concept mastery records yet." />
-                    )}
-
-                    {analysis.conceptMastery?.map((item) => (
-                      <div key={item.concept}>
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-bold text-slate-900">
-                              {item.concept}
-                            </p>
-                            <p className="text-xs font-semibold text-slate-400">
-                              Avg mastery{" "}
-                              {formatPercent(item.averageMasteryPercentage)}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${getMasteryStyle(
-                              item.masteryLevel,
-                            )}`}
-                          >
-                            {item.masteryLevel}
-                          </span>
-                        </div>
-
-                        <ProgressBar
-                          value={item.averageMasteryPercentage}
-                          color="bg-emerald-500"
-                        />
+                  <div className="space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-bold text-slate-600">
+                          Initial Mastery
+                        </p>
+                        <p className="text-sm font-black text-slate-900">
+                          {formatNumber(bktSummary.initialMastery, 4)}
+                        </p>
                       </div>
-                    ))}
+                      <ProgressBar
+                        value={(bktSummary.initialMastery || 0) * 100}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-bold text-slate-600">
+                          Final Mastery
+                        </p>
+                        <p className="text-sm font-black text-slate-900">
+                          {formatNumber(bktSummary.finalMastery, 4)}
+                        </p>
+                      </div>
+                      <ProgressBar
+                        value={(bktSummary.finalMastery || 0) * 100}
+                        color="bg-emerald-500"
+                      />
+                    </div>
+
+                    <div className="rounded-2xl bg-emerald-50 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-emerald-600">
+                        Improvement
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-emerald-700">
+                        {formatNumber(bktSummary.improvement, 4)}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-sm">
                   <h3 className="mb-6 text-xl font-black text-slate-900">
-                    Q-Learning Decisions
+                    My Q-Learning Support
                   </h3>
 
                   <div className="space-y-4">
                     {analysis.qLearningActions?.length === 0 && (
-                      <EmptyBox message="No Q-learning actions recorded yet." />
+                      <EmptyBox message="No Q-learning support actions recorded yet." />
                     )}
 
                     {analysis.qLearningActions?.map((action) => (
@@ -741,44 +655,38 @@ const StudentAnalytics = () => {
                   </h3>
 
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-emerald-700">
-                      <div className="mb-3 flex items-center gap-2">
-                        <CheckCircle2 size={18} />
-                        <h4 className="font-black">Difficulty Analysis</h4>
-                      </div>
-                      <p className="text-sm leading-6">
-                        {difficultySummary.matchPercentage
-                          ? `${formatPercent(
-                              difficultySummary.matchPercentage,
-                            )} of dynamic difficulty labels matched lecturer labels.`
-                          : "Difficulty analysis will improve after more students attempt questions."}
-                      </p>
-                    </div>
+                    {analysis.aiInsights?.length === 0 && (
+                      <EmptyBox message="No insights available yet." />
+                    )}
 
-                    <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5 text-amber-700">
-                      <div className="mb-3 flex items-center gap-2">
-                        <AlertTriangle size={18} />
-                        <h4 className="font-black">Stuck Detection</h4>
-                      </div>
-                      <p className="text-sm leading-6">
-                        {stuckSummary.totalStuckEvents || 0} stuck events were
-                        detected in this module. The system triggered{" "}
-                        {stuckSummary.interventionsTriggered || 0} adaptive
-                        support actions.
-                      </p>
-                    </div>
+                    {analysis.aiInsights?.map((insight) => (
+                      <div
+                        key={insight.title}
+                        className={`rounded-2xl border p-5 ${
+                          insight.type === "success"
+                            ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                            : insight.type === "warning"
+                              ? "border-amber-100 bg-amber-50 text-amber-700"
+                              : "border-sky-100 bg-sky-50 text-sky-700"
+                        }`}
+                      >
+                        <div className="mb-3 flex items-center gap-2">
+                          {insight.type === "success" ? (
+                            <CheckCircle2 size={18} />
+                          ) : insight.type === "warning" ? (
+                            <AlertTriangle size={18} />
+                          ) : (
+                            <Award size={18} />
+                          )}
 
-                    <div className="rounded-2xl border border-sky-100 bg-sky-50 p-5 text-sky-700">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Award size={18} />
-                        <h4 className="font-black">BKT Mastery</h4>
+                          <h4 className="font-black">{insight.title}</h4>
+                        </div>
+
+                        <p className="text-sm leading-6">
+                          {insight.description}
+                        </p>
                       </div>
-                      <p className="text-sm leading-6">
-                        Average mastery improved by{" "}
-                        {formatNumber(bktSummary.averageImprovement, 4)} based
-                        on the recorded model decision logs.
-                      </p>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </aside>
