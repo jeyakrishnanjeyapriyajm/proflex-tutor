@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 
 import Loading from "../common/Loading";
-
+import CompletedModuleReview from "./CompletedModuleReview";
 import {
   getTaskModules,
   startTaskModule,
   getCurrentTask,
   submitTaskAnswer,
   submitSuggestedRoundResult,
+  getCompletedModuleReview,
 } from "../../services/taskGivingService";
 
 const RECOVERY_SUPPORT_ACTIONS = [
@@ -87,6 +88,8 @@ const StudentTaskGivingPanel = () => {
   const [correctCount, setCorrectCount] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [roundResult, setRoundResult] = useState(null);
+  const [completedReview, setCompletedReview] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   const isQuestionPageOpen = Boolean(selectedModule);
   const currentSuggestedQuestion = suggestedQuestions[suggestedIndex];
@@ -161,6 +164,7 @@ const StudentTaskGivingPanel = () => {
     setSelectedModule(null);
     setStartedAt(null);
     setElapsedSeconds(0);
+    setCompletedReview(null);
     resetTaskUi();
   };
 
@@ -375,6 +379,22 @@ const StudentTaskGivingPanel = () => {
     showMessage(data.message || "Use the support and try again.", "info");
   };
 
+  const loadCompletedReview = async (moduleId) => {
+    if (!moduleId) return;
+
+    try {
+      setReviewLoading(true);
+
+      const data = await getCompletedModuleReview(moduleId);
+
+      setCompletedReview(data);
+    } catch (error) {
+      console.error("LOAD COMPLETED REVIEW ERROR:", error);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
   const handleSubmitAnswer = async () => {
     if (questionLocked) {
       showMessage(
@@ -466,7 +486,14 @@ const StudentTaskGivingPanel = () => {
         setSuggestedQuestions([]);
         setQuestionLocked(false);
         setRecoveryPopupOpen(false);
-        showMessage(data.message || "Module completed.", "success");
+
+        await loadCompletedReview(selectedModule._id);
+
+        showMessage(
+          data.message || "Module completed. Review your answers below.",
+          "success",
+        );
+
         return;
       }
       if (data.nextAction === "EXIT_ASSESSMENT_REVIEW_CONCEPT") {
@@ -618,7 +645,14 @@ const StudentTaskGivingPanel = () => {
         resetTaskUi();
         setTask(null);
         setProgress(result.progress || progress);
-        showMessage(result.message || "Module completed.", "success");
+
+        await loadCompletedReview(selectedModule._id);
+
+        showMessage(
+          result.message || "Module completed. Review your answers below.",
+          "success",
+        );
+
         return;
       }
 
@@ -1367,6 +1401,15 @@ const StudentTaskGivingPanel = () => {
                   </div>
                 </div>
               )}
+            {reviewLoading && (
+              <div className="rounded-2xl bg-white p-5 text-sm font-bold text-slate-500 shadow-sm">
+                Loading completed review...
+              </div>
+            )}
+
+            {completedReview && (
+              <CompletedModuleReview reviewData={completedReview} />
+            )}
           </section>
         )}
       </div>

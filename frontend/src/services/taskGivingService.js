@@ -34,3 +34,11 @@ export const submitModelReward = async (payload) => {
   const { data } = await API.post("/model/support-reward", payload);
   return data;
 };
+
+export const getCompletedModuleReview = async (moduleId) => {
+  const response = await API.get(
+    `/task-giving/modules/${moduleId}/completed-review`
+  );
+
+  return response.data;
+};

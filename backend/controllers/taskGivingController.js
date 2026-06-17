@@ -1819,6 +1819,132 @@ const retryModuleAssessment = async (req, res) => {
   }
 };
 
+// Task giving review 
+const getCompletedModuleReview = async (req, res) => {
+  try {
+    const studentId = getStudentId(req);
+    const { moduleId } = req.params;
+
+    const progress = await StudentModuleProgress.findOne({
+      student: studentId,
+      module: moduleId,
+    });
+
+    if (!progress) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress not found. Start this module first.",
+      });
+    }
+
+    if (progress.status !== "completed") {
+      return res.status(403).json({
+        success: false,
+        message: "Review is available only after completing the module.",
+      });
+    }
+
+    const questions = await Question.find({
+      _id: { $in: progress.mainQuestionSequence || [] },
+    })
+      .select(
+        "_id questionText codeSnippet options correctAnswer explanation hint detailedHint concept difficulty orderNo"
+      )
+      .lean();
+
+    const attempts = await QuestionAttempt.find({
+      student: studentId,
+      module: moduleId,
+      question: { $in: progress.mainQuestionSequence || [] },
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const attemptMap = new Map();
+
+    attempts.forEach((attempt) => {
+      const questionId = String(attempt.question);
+
+      if (!attemptMap.has(questionId)) {
+        attemptMap.set(questionId, []);
+      }
+
+      attemptMap.get(questionId).push(attempt);
+    });
+
+    const questionMap = new Map();
+
+    questions.forEach((question) => {
+      questionMap.set(String(question._id), question);
+    });
+
+    const reviewQuestions = (progress.mainQuestionSequence || [])
+      .map((questionId) => {
+        const question = questionMap.get(String(questionId));
+
+        if (!question) return null;
+
+        const questionAttempts = attemptMap.get(String(question._id)) || [];
+        const lastAttempt = questionAttempts[questionAttempts.length - 1];
+
+        const correctOption = question.options?.find(
+          (option) => option.label === question.correctAnswer
+        );
+
+        const selectedOption = question.options?.find(
+          (option) => option.label === lastAttempt?.selectedAnswer
+        );
+
+        return {
+          questionId: question._id,
+          orderNo: question.orderNo,
+          questionText: question.questionText,
+          codeSnippet: question.codeSnippet || "",
+          concept: question.concept,
+          difficulty: question.difficulty,
+
+          options: question.options || [],
+
+          selectedAnswer: lastAttempt?.selectedAnswer || "",
+          selectedAnswerText: selectedOption?.text || "",
+          correctAnswer: question.correctAnswer,
+          correctAnswerText: correctOption?.text || "",
+
+          isCorrect: Boolean(lastAttempt?.isCorrect),
+          attemptCount: questionAttempts.length,
+          timeTakenSeconds: lastAttempt?.timeTakenSeconds || 0,
+          hintUsed: Boolean(lastAttempt?.hintUsed),
+          isStuck: Boolean(lastAttempt?.isStuck),
+          misconceptionTag: lastAttempt?.misconceptionTag || "",
+
+          hint: question.hint || "",
+          detailedHint: question.detailedHint || "",
+          explanation: question.explanation || "",
+        };
+      })
+      .filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      message: "Completed module review loaded.",
+      score: progress.score,
+      percentage: progress.percentage,
+      totalQuestions: progress.totalQuestions,
+      overallMasteryLevel: progress.overallMasteryLevel,
+      progress,
+      reviewQuestions,
+    });
+  } catch (error) {
+    console.error("GET COMPLETED MODULE REVIEW ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load completed module review",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getLearningModules,
   startModule,
@@ -1826,4 +1952,5 @@ module.exports = {
   submitTaskAnswer,
   handleSuggestedRoundResult,
   retryModuleAssessment,
+  getCompletedModuleReview,
 };
