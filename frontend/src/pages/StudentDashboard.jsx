@@ -5,11 +5,7 @@ import { studentDashboardMockData } from "../data/studentDashboardData";
 
 const StudentDashboard = () => {
   return (
-    <PortalLayout
-      tabs={studentTabs}
-      title="Student Portal"
-      subtitle="C programming workspace"
-    >
+    <PortalLayout tabs={studentTabs} title="Student Portal">
       <UserOverview data={studentDashboardMockData} />
     </PortalLayout>
   );

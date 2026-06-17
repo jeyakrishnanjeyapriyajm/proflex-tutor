@@ -1,7 +1,8 @@
 import { BrainCircuit, Clock, Trophy, TrendingUp } from "lucide-react";
 
 const ProgressSummary = ({ dashboard }) => {
-  const progress = dashboard?.completion || dashboard?.overallProgress || 0;
+  const rawProgress = dashboard?.completion || dashboard?.overallProgress || 0;
+  const progress = Math.max(0, Math.min(100, Number(rawProgress) || 0));
 
   return (
     <section className="relative overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white p-8 text-left shadow-sm">
