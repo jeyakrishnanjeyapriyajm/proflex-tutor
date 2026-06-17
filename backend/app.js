@@ -20,7 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
-
+app.use("/api/difficulty", difficultyRoutes);
 
 
 app.use("/api/model", modelRewardRoutes);
