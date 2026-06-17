@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
+
 
 dotenv.config();
 
@@ -17,6 +17,7 @@ const allowedOrigins = [
   "https://proflex-tutor.vercel.app",
   "https://proflex-tutor-akfyxc71l-jeyas-projects-999d4ec8.vercel.app",
 ];
+const studentAnalyticsRoutes = require("./routes/studentAnalyticsRoutes");
 
 const corsOptions = {
   origin: function (origin, callback) {

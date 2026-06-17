@@ -10,25 +10,14 @@ const getToken = () => {
   );
 };
 
-const getAuthHeaders = () => {
+export const getStudentAnalytics = async () => {
   const token = getToken();
 
-  return {
+  const response = await axios.get(`${API_URL}/student/analytics`, {
     headers: {
       Authorization: token ? `Bearer ${token}` : "",
     },
-  };
-};
-
-export const getStudentAnalytics = async () => {
-  const response = await axios.get(
-    `${API_URL}/student/analytics`,
-    getAuthHeaders()
-  );
+  });
 
   return response.data;
-
-
-  
 };
-
