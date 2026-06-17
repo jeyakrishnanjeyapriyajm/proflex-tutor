@@ -1,3 +1,6 @@
+import os
+import uvicorn
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,6 +20,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,6 +35,7 @@ def root():
         "message": "Adaptive Tutor Python Model Running"
     }
 
+
 # =========================
 # HEALTH ROUTE
 # =========================
@@ -38,8 +43,10 @@ def root():
 @app.get("/health")
 def health():
     return {
-        "status": "ok"
+        "status": "ok",
+        "message": "Python AI model service is running"
     }
+
 
 # =========================
 # LOAD MODELS
@@ -64,6 +71,7 @@ except Exception as e:
     print("STARTUP ERROR:")
     print(str(e))
     raise e
+
 
 # =========================
 # REQUEST MODELS
@@ -111,6 +119,7 @@ class RewardPayload(BaseModel):
     reward: float
     next_state: Optional[List[Any]] = None
 
+
 # =========================
 # ANALYZE ENDPOINT
 # =========================
@@ -123,7 +132,8 @@ def analyze(payload: InteractionPayload):
 
     except Exception as e:
         print("ANALYZE ERROR:", str(e))
-        raise
+        raise e
+
 
 # =========================
 # REWARD ENDPOINT
@@ -143,4 +153,17 @@ def reward(payload: RewardPayload):
 
     except Exception as e:
         print("REWARD ERROR:", str(e))
-        raise
+        raise e
+
+
+# =========================
+# LOCAL / MANUAL RUN
+# =========================
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port
+    )
