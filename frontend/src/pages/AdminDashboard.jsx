@@ -7,6 +7,7 @@ import {
   UserCheck,
   Users,
   BookOpen,
+  BarChart3,
 } from "lucide-react";
 
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -15,8 +16,8 @@ import AdminOverview from "../components/adminDashboard/AdminOverview";
 import PendingInstructors from "../components/adminDashboard/PendingInstructors";
 import AdminUsers from "../components/adminDashboard/AdminUsers";
 import AdminSettings from "../components/adminDashboard/AdminSettings";
-
 import AdminCurriculum from "../components/adminDashboard/AdminCurriculum";
+import AdminAnalysis from "../components/adminDashboard/AdminAnalysis";
 
 const AdminDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,23 +44,28 @@ const AdminDashboard = () => {
       description: "Manage accounts",
     },
     {
-      key: "settings",
-      label: "Settings",
-      icon: Settings,
-      description: "Platform settings",
-    },
-    {
       key: "curriculum",
       label: "Curriculum",
       icon: BookOpen,
       description: "Manage modules",
+    },
+    {
+      key: "analysis",
+      label: "Analysis",
+      icon: BarChart3,
+      description: "Student analysis",
+    },
+    {
+      key: "settings",
+      label: Settings,
+      icon: Settings,
+      description: "Platform settings",
     },
   ];
 
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-slate-50/50 font-sans">
-        {/* Page Header */}
         <header className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900">
@@ -92,8 +98,7 @@ const AdminDashboard = () => {
           </div>
         </header>
 
-        {/* Admin Tabs */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -143,13 +148,13 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* Active Content */}
         <div className="min-w-0">
           {activeTab === "overview" && <AdminOverview />}
           {activeTab === "approvals" && <PendingInstructors />}
           {activeTab === "users" && <AdminUsers />}
-          {activeTab === "settings" && <AdminSettings />}
           {activeTab === "curriculum" && <AdminCurriculum />}
+          {activeTab === "analysis" && <AdminAnalysis />}
+          {activeTab === "settings" && <AdminSettings />}
         </div>
       </div>
     </DashboardLayout>
