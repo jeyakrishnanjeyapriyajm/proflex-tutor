@@ -57,7 +57,7 @@ const AdminDashboard = () => {
     },
     {
       key: "settings",
-      label: Settings,
+      label: "Settings",
       icon: Settings,
       description: "Platform settings",
     },
