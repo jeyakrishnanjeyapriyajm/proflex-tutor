@@ -1,152 +1,244 @@
 import {
   GraduationCap,
-  Twitter,
-  Linkedin,
-  Github,
   Mail,
   ArrowRight,
+  BookOpen,
+  BrainCircuit,
+  BarChart3,
+  ShieldCheck,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
+  const platformLinks = [
+    {
+      label: "Features",
+      to: "/features",
+    },
+    {
+      label: "How It Works",
+      to: "/how-it-works",
+    },
+    {
+      label: "Curriculum",
+      to: "/curriculum",
+    },
+    {
+      label: "About",
+      to: "/about",
+    },
+  ];
+
+  const learningLinks = [
+    {
+      label: "Student Login",
+      to: "/login",
+    },
+    {
+      label: "Register",
+      to: "/register/student",
+    },
+    {
+      label: "Instructor Access",
+      to: "/register/lecturer",
+    },
+    {
+      label: "Dashboard",
+      to: "/student",
+    },
+  ];
+
+  const supportLinks = [
+    {
+      label: "Help Center",
+      to: "/about",
+    },
+    {
+      label: "Contact",
+      to: "/about",
+    },
+    {
+      label: "Privacy Policy",
+      to: "/privacy",
+    },
+    {
+      label: "Terms",
+      to: "/terms",
+    },
+  ];
+
   return (
     <footer className="border-t border-slate-800 bg-slate-950 text-white">
       {/* CTA Section */}
       <div className="mx-auto max-w-7xl px-6 pt-16">
-        <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-700 p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
-          <div>
-            <h2 className="text-3xl font-bold">
-              Start your learning journey today
-            </h2>
-            <p className="mt-3 text-blue-100 max-w-xl">
-              Explore courses, improve your skills, and connect with a global
-              learning community.
-            </p>
-          </div>
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-sky-600 via-blue-700 to-indigo-800 p-8 shadow-2xl shadow-blue-950/30 md:p-10">
+          <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+          <div className="absolute -bottom-20 left-10 h-56 w-56 rounded-full bg-sky-300/20 blur-3xl" />
 
-          <button className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-blue-700 hover:bg-slate-100 transition">
-            Get Started
-            <ArrowRight size={18} />
-          </button>
+          <div className="relative z-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-sky-100">
+                <BrainCircuit size={16} />
+                AI Assistive C Tutor
+              </div>
+
+              <h2 className="max-w-2xl text-3xl font-black tracking-tight md:text-4xl">
+                Build stronger C programming skills with adaptive learning.
+              </h2>
+
+              <p className="mt-4 max-w-2xl text-sm font-medium leading-7 text-sky-100 md:text-base">
+                ProgFlex supports students with personalized task giving,
+                difficulty analysis, mastery tracking, and AI-based learning
+                support.
+              </p>
+            </div>
+
+            <Link
+              to="/register/student"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-blue-700 shadow-lg shadow-blue-900/20 transition hover:bg-slate-100"
+            >
+              Get Started
+              <ArrowRight size={18} />
+            </Link>
+          </div>
         </div>
       </div>
 
+      {/* Main Footer */}
       <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="grid gap-12 md:grid-cols-12">
+        <div className="grid gap-12 lg:grid-cols-12">
           {/* Brand */}
-          <div className="md:col-span-5">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                <GraduationCap className="h-7 w-7" />
+          <div className="lg:col-span-5">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-lg shadow-sky-950/40">
+                <GraduationCap className="h-8 w-8" />
               </div>
 
               <div>
-                <h3 className="text-2xl font-black">LearnSphere</h3>
-                <p className="text-sm text-slate-400">Learn. Grow. Achieve.</p>
+                <h3 className="text-2xl font-black tracking-tight">ProgFlex</h3>
+                <p className="text-sm font-semibold text-slate-400">
+                  Adaptive C Programming Tutor
+                </p>
               </div>
             </div>
 
-            <p className="text-slate-400 leading-relaxed max-w-md">
-              A modern learning platform designed to help students discover
-              knowledge, build skills, and achieve their goals through quality
-              education.
+            <p className="max-w-md text-sm font-medium leading-7 text-slate-400">
+              A smart learning platform designed for first-year programming
+              students. It helps learners practise C programming through
+              adaptive questions, recovery support, and progress analytics.
             </p>
 
-            {/* Social */}
-            <div className="flex gap-4 mt-8">
-              {[Twitter, Linkedin, Github, Mail].map((Icon, index) => (
-                <a
-                  key={index}
-                  href="#"
-                  className="h-11 w-11 flex items-center justify-center rounded-full bg-slate-900 text-slate-400 hover:bg-blue-600 hover:text-white transition-all duration-300"
-                >
-                  <Icon size={20} />
-                </a>
-              ))}
+            <div className="mt-8 grid max-w-md grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <BookOpen className="mb-3 text-sky-400" size={22} />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Learn
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <BrainCircuit className="mb-3 text-indigo-400" size={22} />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Adapt
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <BarChart3 className="mb-3 text-emerald-400" size={22} />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Improve
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Links */}
-          <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-10">
+          <div className="grid gap-10 sm:grid-cols-3 lg:col-span-7">
             <div>
-              <h4 className="font-semibold text-lg mb-5">Platform</h4>
+              <h4 className="mb-5 text-lg font-black text-white">Platform</h4>
 
-              <ul className="space-y-3 text-slate-400 text-sm">
-                <li>
-                  <a className="hover:text-white transition">Courses</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Learning Paths</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Certifications</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Community</a>
-                </li>
+              <ul className="space-y-3 text-sm font-semibold text-slate-400">
+                {platformLinks.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      to={link.to}
+                      className="transition hover:text-sky-400"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-lg mb-5">Company</h4>
+              <h4 className="mb-5 text-lg font-black text-white">Learning</h4>
 
-              <ul className="space-y-3 text-slate-400 text-sm">
-                <li>
-                  <a className="hover:text-white transition">About Us</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Careers</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Partners</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Contact</a>
-                </li>
+              <ul className="space-y-3 text-sm font-semibold text-slate-400">
+                {learningLinks.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      to={link.to}
+                      className="transition hover:text-sky-400"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-lg mb-5">Support</h4>
+              <h4 className="mb-5 text-lg font-black text-white">Support</h4>
 
-              <ul className="space-y-3 text-slate-400 text-sm">
-                <li>
-                  <a className="hover:text-white transition">Help Center</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">FAQs</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Feedback</a>
-                </li>
-
-                <li>
-                  <a className="hover:text-white transition">Documentation</a>
-                </li>
+              <ul className="space-y-3 text-sm font-semibold text-slate-400">
+                {supportLinks.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      to={link.to}
+                      className="transition hover:text-sky-400"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
+
+              <div className="mt-7 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sky-400">
+                  <Mail size={17} />
+                  <span className="text-xs font-black uppercase tracking-widest">
+                    Contact
+                  </span>
+                </div>
+
+                <p className="text-sm font-semibold text-slate-400">
+                  support@progflex.edu
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Bottom */}
-      <div className="border-t border-slate-800 bg-slate-900">
-        <div className="mx-auto max-w-7xl px-6 py-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-slate-500">
-          <p>© 2026 LearnSphere. All rights reserved.</p>
+      <div className="border-t border-slate-800 bg-slate-900/80">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-6 text-sm font-semibold text-slate-500 sm:flex-row">
+          <p>© 2026 ProgFlex. All rights reserved.</p>
 
-          <div className="flex gap-6">
-            <a className="hover:text-white transition">Privacy Policy</a>
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck size={16} />
+              Secure Learning Platform
+            </span>
 
-            <a className="hover:text-white transition">Terms</a>
+            <Link to="/privacy" className="transition hover:text-white">
+              Privacy
+            </Link>
 
-            <a className="hover:text-white transition">Cookies</a>
+            <Link to="/terms" className="transition hover:text-white">
+              Terms
+            </Link>
           </div>
         </div>
       </div>
