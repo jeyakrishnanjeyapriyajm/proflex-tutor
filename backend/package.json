@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed:task": "node seed/seedTaskGiving.js"
+    "seed:task": "node seed/seedTaskGiving.js",
+    "seed:admin": "node seed/seedAdmin.js"
+
+
+    
   },
   "keywords": [],
   "author": "",
