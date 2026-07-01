@@ -7,7 +7,8 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed:task": "node seed/seedTaskGiving.js",
-    "seed:admin": "node seed/seedAdmin.js"
+    "seed:admin": "node seed/seedAdmin.js",
+    "seed:students": "node seed/seedStudentSimulation.js"
 
 
     

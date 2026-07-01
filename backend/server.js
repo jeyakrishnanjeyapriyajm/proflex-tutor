@@ -53,6 +53,7 @@ app.use("/api/analysis", require("./routes/analysisRoutes"));
 app.use("/api/student-analysis",require("./routes/studentAnalysisRoutes"));
 app.use("/api/task-giving", require("./routes/taskGivingRoutes"));
 app.use("/api/student-dashboard", require("./routes/studentDashboardRoutes"));
+app.use("/api/lecturer", require("./routes/lecturerRoutes"));
 
 // Optional: only keep this if you really use difficultyRoutes
 // app.use("/api/difficulty", require("./routes/difficultyRoutes"));

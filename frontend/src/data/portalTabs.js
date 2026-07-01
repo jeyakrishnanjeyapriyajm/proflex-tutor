@@ -26,7 +26,7 @@ export const studentTabs = [
 ];
 
 export const lecturerTabs = [
-  { label: "Overview", path: "/lecturer/overview", icon: LayoutDashboard, description: "Teaching summary" },
+  { label: "Overview", path: "/lecturer", icon: LayoutDashboard, description: "Teaching summary" },
   { label: "Analytics", path: "/lecturer/analytics", icon: BarChart3, description: "Class insights" },
   { label: "Question Bank", path: "/lecturer/question-bank", icon: HelpCircle, description: "Manage questions" },
   { label: "Content", path: "/lecturer/content", icon: Library, description: "Learning content" },

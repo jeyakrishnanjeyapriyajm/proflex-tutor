@@ -22,6 +22,13 @@ import StudentSettings from "../pages/StudentSettings";
 
 import AdminDashboard from "../pages/AdminDashboard";
 
+import InstructorDashboard from "../pages/InstructorDashboard";
+import LecturerAnalytics from "../pages/LecturerAnalytics";
+import LecturerContent from "../pages/LecturerContent";
+import LecturerQuestionBank from "../pages/LecturerQuestionBank";
+import LecturerSettings from "../pages/LecturerSettings";
+import LecturerStudents from "../pages/LecturerStudents";
+
 import RoleRoute from "../components/auth/RoleRoute";
 
 const AppRoutes = () => {
@@ -149,14 +156,69 @@ const AppRoutes = () => {
         element={<Navigate to="/admin/dashboard" replace />}
       />
 
+      {/* Lecturer / Instructor Portal */}
       <Route
-        path="/instructor-dashboard"
-        element={<Navigate to="/approval-pending" replace />}
+        path="/lecturer/dashboard"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <InstructorDashboard />
+          </RoleRoute>
+        }
       />
 
       <Route
-        path="/lecturer/*"
-        element={<Navigate to="/approval-pending" replace />}
+        path="/lecturer/analytics"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerAnalytics />
+          </RoleRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer/content"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerContent />
+          </RoleRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer/question-bank"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerQuestionBank />
+          </RoleRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer/students"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerStudents />
+          </RoleRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer/settings"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerSettings />
+          </RoleRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer"
+        element={<Navigate to="/lecturer/dashboard" replace />}
+      />
+
+      <Route
+        path="/instructor-dashboard"
+        element={<Navigate to="/lecturer/dashboard" replace />}
       />
 
       {/* 404 */}

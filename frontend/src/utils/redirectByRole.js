@@ -5,13 +5,24 @@ export const getDashboardPath = (user) => {
     return "/admin/dashboard";
   }
 
-  if (user.role === "instructor" && user.roleStatus === "approved") {
-    return "/lecturer/overview";
+  // Approved lecturer / instructor
+  if (
+    user.role === "instructor" &&
+    (user.roleStatus === "approved" ||
+      user.status === "approved" ||
+      user.isApproved === true ||
+      user.approved === true)
+  ) {
+    return "/lecturer/dashboard";
   }
 
+  // Pending lecturer / instructor
   if (
-    user.requestedRole === "instructor" &&
-    user.roleStatus === "pending"
+    (user.role === "instructor" || user.requestedRole === "instructor") &&
+    (user.roleStatus === "pending" ||
+      user.status === "pending" ||
+      user.isApproved === false ||
+      user.approved === false)
   ) {
     return "/approval-pending";
   }

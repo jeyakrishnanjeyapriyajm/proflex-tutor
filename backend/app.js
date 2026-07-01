@@ -2,11 +2,15 @@ const express = require("express");
 const cors = require("cors");
 const modelRewardRoutes = require("./routes/modelRewardRoutes");
 
+
 const app = express();
 
 app.use(
   cors({
-    origin: "https://proflex-tutor.vercel.app",
+    origin: [
+      "https://proflex-tutor.vercel.app",
+      "http://localhost:5173",
+    ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -21,6 +25,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/task-giving", taskGivingRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/task-giving", taskGivingRoutes);
+app.use("/api/lecturer", lecturerRoutes);
 
 
 app.use("/api/model", modelRewardRoutes);
