@@ -21,13 +21,15 @@ import StudentMessages from "../pages/StudentMessages";
 import StudentSettings from "../pages/StudentSettings";
 
 import AdminDashboard from "../pages/AdminDashboard";
+import AdminMessages from "../pages/AdminMessages";
 
-import InstructorDashboard from "../pages/InstructorDashboard";
+import LecturerOverview from "../pages/LecturerOverview";
 import LecturerAnalytics from "../pages/LecturerAnalytics";
 import LecturerContent from "../pages/LecturerContent";
 import LecturerQuestionBank from "../pages/LecturerQuestionBank";
 import LecturerSettings from "../pages/LecturerSettings";
 import LecturerStudents from "../pages/LecturerStudents";
+import LecturerMessages from "../pages/LecturerMessages";
 
 import RoleRoute from "../components/auth/RoleRoute";
 
@@ -135,6 +137,11 @@ const AppRoutes = () => {
         }
       />
 
+      <Route
+        path="/student"
+        element={<Navigate to="/student/dashboard" replace />}
+      />
+
       {/* Admin Portal */}
       <Route
         path="/admin/dashboard"
@@ -145,23 +152,35 @@ const AppRoutes = () => {
         }
       />
 
-      {/* Old route redirects */}
       <Route
-        path="/user-dashboard"
-        element={<Navigate to="/student/dashboard" replace />}
+        path="/admin/messages"
+        element={
+          <RoleRoute allowedRoles={["admin"]}>
+            <AdminMessages />
+          </RoleRoute>
+        }
       />
 
       <Route
-        path="/admin-dashboard"
+        path="/admin"
         element={<Navigate to="/admin/dashboard" replace />}
       />
 
       {/* Lecturer / Instructor Portal */}
       <Route
+        path="/lecturer/overview"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerOverview />
+          </RoleRoute>
+        }
+      />
+
+      <Route
         path="/lecturer/dashboard"
         element={
           <RoleRoute allowedRoles={["instructor", "admin"]}>
-            <InstructorDashboard />
+            <LecturerOverview />
           </RoleRoute>
         }
       />
@@ -203,6 +222,15 @@ const AppRoutes = () => {
       />
 
       <Route
+        path="/lecturer/messages"
+        element={
+          <RoleRoute allowedRoles={["instructor", "admin"]}>
+            <LecturerMessages />
+          </RoleRoute>
+        }
+      />
+
+      <Route
         path="/lecturer/settings"
         element={
           <RoleRoute allowedRoles={["instructor", "admin"]}>
@@ -213,12 +241,23 @@ const AppRoutes = () => {
 
       <Route
         path="/lecturer"
-        element={<Navigate to="/lecturer/dashboard" replace />}
+        element={<Navigate to="/lecturer/overview" replace />}
+      />
+
+      {/* Old route redirects */}
+      <Route
+        path="/user-dashboard"
+        element={<Navigate to="/student/dashboard" replace />}
+      />
+
+      <Route
+        path="/admin-dashboard"
+        element={<Navigate to="/admin/dashboard" replace />}
       />
 
       <Route
         path="/instructor-dashboard"
-        element={<Navigate to="/lecturer/dashboard" replace />}
+        element={<Navigate to="/lecturer/overview" replace />}
       />
 
       {/* 404 */}

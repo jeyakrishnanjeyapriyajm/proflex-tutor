@@ -12,6 +12,7 @@ import {
 import PortalLayout from "../layouts/PortalLayout";
 import { studentTabs } from "../data/portalTabs";
 import { PRACTICE_CONTENT } from "../data/learningContent";
+import { runCCode } from "../services/compilerService";
 
 const StudentWorkspace = () => {
   const concepts = Object.keys(PRACTICE_CONTENT);
@@ -19,23 +20,73 @@ const StudentWorkspace = () => {
   const content = PRACTICE_CONTENT[activeConcept];
 
   const [code, setCode] = useState(content?.initialCode || "");
+  const [running, setRunning] = useState(false);
+
   const [output, setOutput] = useState([
     "Workspace ready.",
-    "Click Run Code to simulate output.",
+    "Click Run Code to compile and execute your C program.",
   ]);
 
   useEffect(() => {
     setCode(content?.initialCode || "");
-    setOutput(["Workspace ready.", "Click Run Code to simulate output."]);
+    setOutput([
+      "Workspace ready.",
+      "Click Run Code to compile and execute your C program.",
+    ]);
   }, [activeConcept, content?.initialCode]);
 
-  const handleRunCode = () => {
-    setOutput([
-      "Compiling using GCC 11.4.0...",
-      "> Program compiled successfully.",
-      "> Execution time: 0.002s",
-      "> Output generated successfully.",
-    ]);
+  const handleRunCode = async () => {
+    try {
+      setRunning(true);
+
+      setOutput(["Sending code to compiler...", "Compiling with GCC..."]);
+
+      const result = await runCCode(code);
+
+      if (result.success) {
+        setOutput([
+          "Compilation successful.",
+          "Program output:",
+          result.output,
+        ]);
+
+        return;
+      }
+
+      if (result.stage === "compile") {
+        setOutput([
+          "Compilation failed.",
+          result.output || "Compiler error occurred.",
+        ]);
+
+        return;
+      }
+
+      if (result.stage === "runtime") {
+        setOutput([
+          "Runtime error.",
+          result.output || "Program crashed while running.",
+        ]);
+
+        return;
+      }
+
+      setOutput([
+        "Execution failed.",
+        result.output || result.message || "Unknown error occurred.",
+      ]);
+    } catch (error) {
+      console.error("RUN C CODE ERROR:", error);
+
+      setOutput([
+        "Compiler API error.",
+        error.response?.data?.message ||
+          error.response?.data?.output ||
+          "Could not connect to compiler server.",
+      ]);
+    } finally {
+      setRunning(false);
+    }
   };
 
   const handleReset = () => {
@@ -60,24 +111,30 @@ const StudentWorkspace = () => {
               <h2 className="text-sm font-bold leading-tight text-white">
                 {content?.title || "C Programming Lab"}
               </h2>
+
               <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Interactive Coding Workspace
+                Interactive C Compiler Workspace
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-700 px-4 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-600">
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-700 px-4 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-600"
+            >
               <Save size={14} />
               Save Draft
             </button>
 
             <button
+              type="button"
               onClick={handleRunCode}
-              className="flex items-center gap-2 rounded-xl bg-sky-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-sky-900/20 transition hover:bg-sky-500"
+              disabled={running}
+              className="flex items-center gap-2 rounded-xl bg-sky-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-sky-900/20 transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Play size={14} fill="currentColor" />
-              Run Code
+              {running ? "Running..." : "Run Code"}
             </button>
           </div>
         </header>
@@ -94,8 +151,8 @@ const StudentWorkspace = () => {
               </h3>
 
               <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                Choose a concept and practice C programming with starter code,
-                task instructions, and AI tutor guidance.
+                Choose a concept and practise C programming with starter code,
+                task instructions, and compiler output.
               </p>
             </div>
 
@@ -103,6 +160,7 @@ const StudentWorkspace = () => {
               {concepts.map((concept) => (
                 <button
                   key={concept}
+                  type="button"
                   onClick={() => setActiveConcept(concept)}
                   className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${
                     activeConcept === concept
@@ -152,8 +210,8 @@ const StudentWorkspace = () => {
                 </h4>
 
                 <p className="text-xs italic leading-loose text-sky-100/70">
-                  Remember that in C, every statement must end with a semicolon.
-                  Read compiler errors carefully before changing your logic.
+                  Read compiler errors carefully. If the program does not run,
+                  check semicolons, brackets, header files, and spelling first.
                 </p>
               </div>
             </div>
@@ -162,6 +220,7 @@ const StudentWorkspace = () => {
           <main className="flex flex-col bg-slate-900 lg:col-span-8">
             <div className="border-b border-slate-800 px-6 py-4">
               <h1 className="text-xl font-bold text-white">{content?.title}</h1>
+
               <p className="mt-1 text-sm leading-relaxed text-slate-400">
                 {content?.description}
               </p>
@@ -170,7 +229,7 @@ const StudentWorkspace = () => {
             <div className="min-h-[420px] flex-1 p-6">
               <textarea
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(event) => setCode(event.target.value)}
                 spellCheck="false"
                 className="h-full min-h-[420px] w-full resize-none rounded-3xl border border-slate-800 bg-slate-950 p-6 font-mono text-sm leading-relaxed text-sky-100 outline-none focus:border-sky-700 focus:ring-4 focus:ring-sky-900/20"
               />
@@ -183,6 +242,7 @@ const StudentWorkspace = () => {
                 </h4>
 
                 <button
+                  type="button"
                   onClick={handleReset}
                   className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 transition hover:text-white"
                 >
@@ -191,11 +251,11 @@ const StudentWorkspace = () => {
                 </button>
               </div>
 
-              <div className="min-h-28 rounded-2xl border border-slate-800 bg-slate-900 p-5 font-mono text-xs text-emerald-400">
+              <div className="min-h-32 whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-5 font-mono text-xs leading-6 text-emerald-400">
                 {output.map((line, index) => (
                   <p
-                    key={index}
-                    className={index === 0 ? "opacity-60" : "mt-2"}
+                    key={`${line}-${index}`}
+                    className={index === 0 ? "opacity-70" : "mt-2"}
                   >
                     {line}
                   </p>

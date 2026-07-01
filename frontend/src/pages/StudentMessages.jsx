@@ -1,357 +1,418 @@
-import { useState } from "react";
-import { Bell, Paperclip, Search, Send, Settings, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Mail,
+  RefreshCw,
+  Reply,
+  Send,
+  Inbox,
+  CheckCircle2,
+  Clock,
+} from "lucide-react";
 
 import PortalLayout from "../layouts/PortalLayout";
 import { studentTabs } from "../data/portalTabs";
+import {
+  getMyMessages,
+  markMessageAsRead,
+  replyMessage,
+} from "../services/messageService";
 
-const chats = [
-  {
-    id: "dr-chathura",
-    name: "Dr. Chathura",
-    lastMsg: "Your assignment looks great, but check the loop...",
-    time: "10:24 AM",
-    avatar: "https://picsum.photos/seed/doc/100/100",
-    online: true,
-  },
-  {
-    id: "ict-support",
-    name: "ICT Support",
-    lastMsg: "The workspace issue has been resolved.",
-    time: "Yesterday",
-    avatar: "https://picsum.photos/seed/support/100/100",
-    online: false,
-  },
-  {
-    id: "study-group-a",
-    name: "Study Group A",
-    lastMsg: "Who is free for a coding session tonight?",
-    time: "Yesterday",
-    avatar: "https://picsum.photos/seed/group/100/100",
-    online: true,
-  },
-];
+const formatDateTime = (dateValue) => {
+  if (!dateValue) return "Not available";
 
-const messages = {
-  "dr-chathura": [
-    {
-      sender: "Dr. Chathura",
-      text: "Hello! I have reviewed your latest code submission for the Loop activity. You handled the logic well, but consider using a more descriptive variable name than 'i' in complex nested loops.",
-      time: "10:24 AM",
-      isMe: false,
-    },
-    {
-      sender: "Me",
-      text: "Thank you, Dr. Chathura! That makes sense. I will refactor it and resubmit. Should I also look into optimizing the time complexity?",
-      time: "10:26 AM",
-      isMe: true,
-    },
-  ],
-  "ict-support": [
-    {
-      sender: "ICT Support",
-      text: "The workspace issue has been resolved. Please refresh your browser and try running the C code again.",
-      time: "Yesterday",
-      isMe: false,
-    },
-    {
-      sender: "Me",
-      text: "Thank you. I will check it now.",
-      time: "Yesterday",
-      isMe: true,
-    },
-  ],
-  "study-group-a": [
-    {
-      sender: "Study Group A",
-      text: "Who is free for a coding session tonight? We can revise arrays and loops.",
-      time: "Yesterday",
-      isMe: false,
-    },
-    {
-      sender: "Me",
-      text: "I can join after 7 PM.",
-      time: "Yesterday",
-      isMe: true,
-    },
-  ],
+  return new Date(dateValue).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getSenderName = (message) => {
+  return message?.sender?.name || "ProgFlex Staff";
+};
+
+const getSenderRole = (message) => {
+  const role = message?.sender?.role || message?.sentByRole || "staff";
+
+  if (role === "admin") return "Admin";
+  if (role === "instructor") return "Lecturer";
+  if (role === "user") return "Student";
+
+  return "Staff";
+};
+
+const getInitials = (name = "User") => {
+  return name
+    .split(" ")
+    .map((item) => item.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 };
 
 const StudentMessages = () => {
-  const [selectedChat, setSelectedChat] = useState("dr-chathura");
+  const [messages, setMessages] = useState([]);
+  const [selectedMessageId, setSelectedMessageId] = useState("");
   const [draftMessage, setDraftMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState({ type: "", text: "" });
 
-  const activeChat = chats.find((chat) => chat.id === selectedChat);
-  const activeMessages = messages[selectedChat] || [];
+  const selectedMessage =
+    messages.find((message) => message._id === selectedMessageId) ||
+    messages[0] ||
+    null;
+
+  const loadMessages = async () => {
+    try {
+      setLoading(true);
+      setNotice({ type: "", text: "" });
+
+      const data = await getMyMessages();
+      const loadedMessages = data.messages || [];
+
+      setMessages(loadedMessages);
+
+      if (loadedMessages.length > 0) {
+        setSelectedMessageId((prev) => prev || loadedMessages[0]._id);
+      } else {
+        setSelectedMessageId("");
+      }
+    } catch (error) {
+      console.error("LOAD STUDENT MESSAGES ERROR:", error);
+
+      setNotice({
+        type: "error",
+        text: error.response?.data?.message || "Failed to load messages.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMessages();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedMessage?._id || selectedMessage?.isRead) return;
+
+    markMessageAsRead(selectedMessage._id)
+      .then(() => {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message._id === selectedMessage._id
+              ? {
+                  ...message,
+                  isRead: true,
+                  readAt: new Date().toISOString(),
+                }
+              : message,
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("MARK MESSAGE READ ERROR:", error);
+      });
+  }, [selectedMessage?._id]);
+
+  const handleSelectMessage = (messageId) => {
+    setSelectedMessageId(messageId);
+    setDraftMessage("");
+    setNotice({ type: "", text: "" });
+  };
+
+  const handleReply = async () => {
+    if (!selectedMessage?._id || !draftMessage.trim()) return;
+
+    try {
+      setSending(true);
+      setNotice({ type: "", text: "" });
+
+      await replyMessage(selectedMessage._id, draftMessage.trim());
+
+      setDraftMessage("");
+
+      setNotice({
+        type: "success",
+        text: "Reply sent successfully.",
+      });
+
+      await loadMessages();
+    } catch (error) {
+      console.error("SEND REPLY ERROR:", error);
+
+      setNotice({
+        type: "error",
+        text: error.response?.data?.message || "Failed to send reply.",
+      });
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <PortalLayout
       tabs={studentTabs}
       title="Student Portal"
-      subtitle="C programming workspace"
+      subtitle="Messages and announcements"
     >
-      <div className="flex h-[calc(100vh-120px)] min-h-[720px] flex-col overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white font-sans shadow-sm">
-        {/* Top Header */}
-        {/* <div className="z-20 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4 lg:px-8">
-          <div className="relative hidden w-96 md:block">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+      <div className="flex h-[calc(100vh-120px)] min-h-[720px] flex-col overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-5 lg:px-8">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-sky-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-sky-600">
+              <Mail size={15} />
+              Message Center
+            </div>
 
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              className="w-full rounded-xl border border-transparent bg-slate-50 py-3 pl-12 pr-4 text-sm font-semibold text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-sky-100 focus:ring-4 focus:ring-sky-600/10"
-            />
+            <h1 className="text-2xl font-black text-slate-900">
+              Messages & Announcements
+            </h1>
+
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              View messages from admin and lecturers. Reply when needed.
+            </p>
           </div>
 
-          <div className="md:hidden">
-            <h1 className="text-2xl font-black text-slate-900">Messages</h1>
+          <button
+            type="button"
+            onClick={loadMessages}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-100 transition hover:bg-sky-700 disabled:opacity-60"
+          >
+            <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
+
+        {notice.text && (
+          <div
+            className={`mx-5 mt-5 rounded-2xl px-5 py-4 text-sm font-bold lg:mx-8 ${
+              notice.type === "success"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-rose-50 text-rose-700"
+            }`}
+          >
+            {notice.text}
           </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600"
-            >
-              <Bell size={20} />
-            </button>
-
-            <div className="mx-2 hidden h-8 w-px bg-slate-100 sm:block" />
-
-            <button
-              type="button"
-              className="group flex items-center gap-4 rounded-2xl p-1.5 text-left transition-all hover:bg-slate-50"
-            >
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-black leading-tight text-slate-900 transition-colors group-hover:text-sky-600">
-                  Kogulan K.
-                </p>
-                <p className="mt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  First Year ICT
-                </p>
-              </div>
-
-              <div className="h-11 w-11 overflow-hidden rounded-xl border border-sky-200 bg-sky-100 shadow-sm transition-all group-hover:ring-4 group-hover:ring-sky-600/10">
-                <img
-                  src="https://picsum.photos/seed/user/200/200"
-                  alt="Avatar"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            </button>
-          </div>
-        </div> */}
+        )}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Chat Sidebar */}
-          <aside className="hidden w-80 shrink-0 flex-col border-r border-slate-100 bg-slate-50/30 md:flex">
-            <div className="p-6">
-              <h2 className="mb-6 text-3xl font-black tracking-tight text-slate-900">
-                Messages
-              </h2>
+          <aside className="hidden w-96 shrink-0 flex-col border-r border-slate-100 bg-slate-50/60 md:flex">
+            <div className="flex items-center justify-between p-6">
+              <div>
+                <h2 className="text-lg font-black text-slate-900">Inbox</h2>
+                <p className="mt-1 text-xs font-bold text-slate-400">
+                  {messages.length} message{messages.length === 1 ? "" : "s"}
+                </p>
+              </div>
 
-              <div className="relative">
-                <Search
-                  size={16}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-                <input
-                  type="text"
-                  placeholder="Search chats..."
-                  className="w-full rounded-xl border border-slate-100 bg-white py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-sky-100 focus:ring-4 focus:ring-sky-600/10"
-                />
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm">
+                <Inbox size={20} />
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {chats.map((chat) => (
-                <button
-                  key={chat.id}
-                  type="button"
-                  onClick={() => setSelectedChat(chat.id)}
-                  className={`flex w-full gap-4 border-b border-white/50 p-6 text-left transition-all ${
-                    selectedChat === chat.id
-                      ? "bg-white shadow-sm"
-                      : "hover:bg-slate-50/80"
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <img
-                      src={chat.avatar}
-                      alt={chat.name}
-                      className="h-12 w-12 rounded-2xl object-cover shadow-sm"
-                    />
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
+              {loading && messages.length === 0 && (
+                <div className="rounded-2xl bg-white p-5 text-sm font-bold text-slate-400">
+                  Loading messages...
+                </div>
+              )}
 
-                    {chat.online && (
-                      <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500" />
-                    )}
-                  </div>
+              {!loading && messages.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm font-bold text-slate-400">
+                  No messages yet.
+                </div>
+              )}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between gap-3">
-                      <p
-                        className={`truncate font-black ${
-                          selectedChat === chat.id
-                            ? "text-sky-600"
-                            : "text-slate-900"
-                        }`}
-                      >
-                        {chat.name}
-                      </p>
+              <div className="space-y-3">
+                {messages.map((message) => {
+                  const isActive = selectedMessage?._id === message._id;
+                  const senderName = getSenderName(message);
 
-                      <span className="whitespace-nowrap text-[10px] font-black uppercase text-slate-400">
-                        {chat.time}
-                      </span>
-                    </div>
+                  return (
+                    <button
+                      key={message._id}
+                      type="button"
+                      onClick={() => handleSelectMessage(message._id)}
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                        isActive
+                          ? "border-sky-200 bg-white shadow-sm"
+                          : "border-transparent bg-white/70 hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-xs font-black text-sky-700">
+                          {getInitials(senderName)}
+                        </div>
 
-                    <p className="truncate text-xs font-medium leading-relaxed text-slate-500">
-                      {chat.lastMsg}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-center justify-between gap-3">
+                            <p
+                              className={`truncate text-sm font-black ${
+                                isActive ? "text-sky-600" : "text-slate-900"
+                              }`}
+                            >
+                              {senderName}
+                            </p>
+
+                            {!message.isRead && (
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-600" />
+                            )}
+                          </div>
+
+                          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            {getSenderRole(message)}
+                          </p>
+
+                          <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
+                            {message.body || ""}
+                          </p>
+
+                          <p className="mt-3 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            <Clock size={12} />
+                            {formatDateTime(message.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </aside>
 
-          {/* Active Chat Area */}
           <main className="flex min-w-0 flex-1 flex-col bg-white">
-            {/* Chat Header */}
-            <div className="z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-5 shadow-sm shadow-slate-900/[0.02] lg:px-8">
-              <div className="flex min-w-0 items-center gap-4">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-slate-100 shadow-sm">
-                  <img
-                    src={activeChat?.avatar}
-                    alt="Active Chat"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+            {!selectedMessage && (
+              <div className="flex flex-1 items-center justify-center p-8">
+                <div className="max-w-md rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm">
+                    <Mail size={26} />
+                  </div>
 
-                <div className="min-w-0">
-                  <h2 className="truncate font-black leading-tight text-slate-900">
-                    {activeChat?.name}
+                  <h2 className="text-xl font-black text-slate-900">
+                    No message selected
                   </h2>
 
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        activeChat?.online ? "bg-emerald-500" : "bg-slate-300"
-                      }`}
-                    />
-
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {activeChat?.online ? "Online" : "Offline"}
-                    </p>
-                  </div>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                    Messages from admins and lecturers will appear here.
+                  </p>
                 </div>
               </div>
+            )}
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="rounded-xl bg-slate-50 p-2.5 text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-600"
-                >
-                  <Users size={20} />
-                </button>
-
-                <button
-                  type="button"
-                  className="rounded-xl bg-slate-50 p-2.5 text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-600"
-                >
-                  <Settings size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Messages Content */}
-            <div className="flex-1 space-y-8 overflow-y-auto bg-slate-50/20 p-5 lg:p-8">
-              <div className="text-center">
-                <span className="rounded-full border border-slate-100 bg-white px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 shadow-sm">
-                  Today
-                </span>
-              </div>
-
-              {activeMessages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`group flex ${
-                    message.isMe ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`flex max-w-[88%] gap-4 sm:max-w-[70%] ${
-                      message.isMe ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div
-                      className={`mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg shadow-sm ${
-                        message.isMe ? "bg-sky-100" : "bg-slate-100"
-                      }`}
-                    >
-                      {message.isMe ? (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-black text-sky-600">
-                          KK
-                        </div>
-                      ) : (
-                        <img
-                          src={activeChat?.avatar}
-                          alt="Sender"
-                          className="h-full w-full object-cover"
-                        />
-                      )}
+            {selectedMessage && (
+              <>
+                <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-5 shadow-sm lg:px-8">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sm font-black text-sky-700">
+                      {getInitials(getSenderName(selectedMessage))}
                     </div>
 
-                    <div className="space-y-2">
-                      <div
-                        className={`rounded-3xl p-5 text-sm font-medium leading-relaxed shadow-sm ${
-                          message.isMe
-                            ? "rounded-tr-none bg-sky-600 text-white"
-                            : "rounded-tl-none border border-slate-100 bg-white text-slate-600"
-                        }`}
-                      >
-                        {message.text}
-                      </div>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-black text-slate-900">
+                        {getSenderName(selectedMessage)}
+                      </h2>
 
-                      <p
-                        className={`text-[10px] font-black uppercase tracking-widest text-slate-400 ${
-                          message.isMe ? "text-right" : "text-left"
-                        }`}
-                      >
-                        {message.time}
+                      <p className="mt-0.5 text-xs font-black uppercase tracking-widest text-slate-400">
+                        {getSenderRole(selectedMessage)}
                       </p>
                     </div>
                   </div>
+
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black ${
+                      selectedMessage.isRead
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-sky-50 text-sky-700"
+                    }`}
+                  >
+                    <CheckCircle2 size={14} />
+                    {selectedMessage.isRead ? "Read" : "New"}
+                  </span>
                 </div>
-              ))}
-            </div>
 
-            {/* Input Area */}
-            <div className="border-t border-slate-100 bg-white p-5 lg:p-8">
-              <div className="group flex items-center gap-4 rounded-[2rem] border border-slate-100 bg-slate-50 p-2 shadow-inner transition-all focus-within:border-sky-600/20 focus-within:bg-white focus-within:ring-4 focus-within:ring-sky-600/5">
-                <button
-                  type="button"
-                  className="rounded-full p-3 text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-600"
-                >
-                  <Paperclip size={20} />
-                </button>
+                <div className="flex-1 overflow-y-auto bg-slate-50/40 p-5 lg:p-8">
+                  <div className="mx-auto max-w-4xl space-y-6">
+                    <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
+                      <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                            Message
+                          </p>
 
-                <input
-                  type="text"
-                  value={draftMessage}
-                  onChange={(e) => setDraftMessage(e.target.value)}
-                  placeholder="Type your message..."
-                  className="flex-1 border-none bg-transparent py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-                />
+                          <h3 className="mt-1 text-xl font-black text-slate-900">
+                            {selectedMessage.subject || "No subject"}
+                          </h3>
+                        </div>
 
-                <button
-                  type="button"
-                  className="flex items-center justify-center rounded-full bg-sky-600 p-4 text-white shadow-lg shadow-sky-200 transition-all hover:bg-sky-700 active:scale-95 group-hover:scale-105"
-                >
-                  <Send size={20} />
-                </button>
-              </div>
-            </div>
+                        <p className="text-right text-xs font-bold text-slate-400">
+                          {formatDateTime(selectedMessage.createdAt)}
+                        </p>
+                      </div>
+
+                      <p className="whitespace-pre-wrap text-sm font-semibold leading-7 text-slate-600">
+                        {selectedMessage.body || ""}
+                      </p>
+                    </div>
+
+                    {selectedMessage.replies?.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="flex items-center gap-2 text-sm font-black text-slate-700">
+                          <Reply size={16} />
+                          Replies
+                        </h4>
+
+                        {selectedMessage.replies.map((reply, index) => (
+                          <div
+                            key={reply._id || index}
+                            className="rounded-2xl bg-sky-600 p-5 text-sm font-semibold leading-7 text-white shadow-sm"
+                          >
+                            <p>{reply.body}</p>
+
+                            <p className="mt-3 text-xs font-bold text-sky-100">
+                              {formatDateTime(reply.createdAt)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 bg-white p-5 lg:p-8">
+                  <div className="mx-auto flex max-w-4xl items-center gap-4 rounded-[2rem] border border-slate-100 bg-slate-50 p-2 shadow-inner">
+                    <input
+                      type="text"
+                      value={draftMessage}
+                      onChange={(event) => setDraftMessage(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleReply();
+                        }
+                      }}
+                      placeholder="Type your reply..."
+                      className="flex-1 border-none bg-transparent px-4 py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleReply}
+                      disabled={!draftMessage.trim() || sending}
+                      className="flex items-center justify-center rounded-full bg-sky-600 p-4 text-white shadow-lg shadow-sky-100 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {sending ? (
+                        <RefreshCw size={20} className="animate-spin" />
+                      ) : (
+                        <Send size={20} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </main>
         </div>
       </div>
